@@ -176,7 +176,31 @@ export default function EncuentroDetailScreen() {
   }, [id]);
 
   if (loading) return <ActivityIndicator style={{ flex: 1, backgroundColor: '#0F172A' }} color="#94A3B8" />;
-  if (!meetup) return null;
+  if (!meetup) {
+    return (
+      <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
+        <View style={styles.header}>
+          <TouchableOpacity onPress={() => router.canGoBack() ? router.back() : router.replace('/(tabs)/encuentros')} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+            <Ionicons name="chevron-back" size={24} color="#6366F1" />
+          </TouchableOpacity>
+          <Text style={styles.headerUsername}>Intercambio</Text>
+          <View style={{ width: 24 }} />
+        </View>
+        <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', padding: 32, gap: 12 }}>
+          <Ionicons name="alert-circle-outline" size={48} color="#475569" />
+          <Text style={{ color: '#94A3B8', fontSize: 15, textAlign: 'center', maxWidth: 280 }}>
+            No encontramos este intercambio. Puede que haya sido eliminado o ya no tengas acceso.
+          </Text>
+          <TouchableOpacity
+            onPress={() => router.canGoBack() ? router.back() : router.replace('/(tabs)/encuentros')}
+            style={{ marginTop: 8, backgroundColor: '#1E293B', borderWidth: 1, borderColor: '#334155', borderRadius: 10, paddingHorizontal: 16, paddingVertical: 10 }}
+          >
+            <Text style={{ color: '#A5B4FC', fontSize: 14, fontWeight: '600' }}>Volver a intercambios</Text>
+          </TouchableOpacity>
+        </View>
+      </SafeAreaView>
+    );
+  }
 
   const isProposer = meetup.proposer_id === user?.id;
   const other = isProposer ? meetup.receiver : meetup.proposer;
@@ -193,6 +217,7 @@ export default function EncuentroDetailScreen() {
   const chatEnabled = meetup.status !== 'cancelled';
 
   async function openEditModal() {
+    if (!user) return;
     setShowEdit(true);
     setLoadingEdit(true);
 
@@ -203,13 +228,13 @@ export default function EncuentroDetailScreen() {
       supabase
         .from('cards_collection')
         .select('*')
-        .eq('user_id', user?.id)
+        .eq('user_id', user.id)
         .in('game', gameFilter)
         .order('card_name'),
       supabase
         .from('collection_folders')
         .select('*')
-        .eq('user_id', user?.id)
+        .eq('user_id', user.id)
         .order('name'),
     ]);
 

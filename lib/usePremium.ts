@@ -12,11 +12,15 @@ export type PremiumState = {
 export function usePremium(): PremiumState {
   const { profile } = useAuth();
   const status = (profile?.premium_status ?? 'free') as PremiumStatus;
-  const isPremium = status === 'active' || status === 'in_grace';
+  const until = profile?.premium_until ? new Date(profile.premium_until) : null;
+  // Defensive: if the webhook is missed/delayed, don't keep granting Pro after
+  // expiration. Premium is active only if state says so AND `until` is in the future.
+  const notExpired = !until || until.getTime() > Date.now();
+  const isPremium = (status === 'active' || status === 'in_grace') && notExpired;
   return {
     isPremium,
     status,
-    until: profile?.premium_until ? new Date(profile.premium_until) : null,
+    until,
     productId: profile?.premium_product_id ?? null,
   };
 }

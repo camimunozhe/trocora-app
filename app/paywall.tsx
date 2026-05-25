@@ -1,13 +1,18 @@
 import { useEffect, useState } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity, ScrollView,
-  ActivityIndicator, Alert,
+  ActivityIndicator, Alert, Linking, Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import Purchases, { PurchasesOffering, PurchasesPackage } from 'react-native-purchases';
+import Constants from 'expo-constants';
 import { useAuth } from '@/context/AuthContext';
+import { supabase } from '@/lib/supabase';
+import { usePremium } from '@/lib/usePremium';
+
+const IS_EXPO_GO = Constants.appOwnership === 'expo';
 
 type IoniconName = React.ComponentProps<typeof Ionicons>['name'];
 
@@ -25,9 +30,7 @@ const FEATURES: Feature[] = [
 ];
 
 function annualMonthlyPriceLabel(annual: PurchasesPackage): string | null {
-  const totalCents = annual.product.price * 100;
-  const monthly = totalCents / 12 / 100;
-  // Match the currency code from the annual product
+  const monthly = annual.product.price / 12;
   try {
     return new Intl.NumberFormat(undefined, {
       style: 'currency',
@@ -39,9 +42,24 @@ function annualMonthlyPriceLabel(annual: PurchasesPackage): string | null {
   }
 }
 
+function introPeriodLabel(intro: { periodNumberOfUnits: number; periodUnit?: string } | null | undefined): string {
+  if (!intro) return '';
+  const n = intro.periodNumberOfUnits;
+  const unit = (intro.periodUnit ?? 'DAY').toUpperCase();
+  const map: Record<string, [string, string]> = {
+    DAY: ['día', 'días'],
+    WEEK: ['semana', 'semanas'],
+    MONTH: ['mes', 'meses'],
+    YEAR: ['año', 'años'],
+  };
+  const [singular, plural] = map[unit] ?? map.DAY;
+  return `${n} ${n === 1 ? singular : plural}`;
+}
+
 export default function PaywallScreen() {
   const router = useRouter();
-  const { refreshProfile } = useAuth();
+  const { refreshProfile, user } = useAuth();
+  const { isPremium, until } = usePremium();
   const [offering, setOffering] = useState<PurchasesOffering | null>(null);
   const [selectedPackage, setSelectedPackage] = useState<PurchasesPackage | null>(null);
   const [loadingOfferings, setLoadingOfferings] = useState(true);
@@ -50,12 +68,15 @@ export default function PaywallScreen() {
 
   useEffect(() => {
     let mounted = true;
+    if (IS_EXPO_GO) {
+      setLoadingOfferings(false);
+      return;
+    }
     Purchases.getOfferings()
       .then(res => {
         if (!mounted) return;
         const current = res.current ?? null;
         setOffering(current);
-        // Default selection: annual if available, else monthly
         const def = current?.annual ?? current?.monthly ?? current?.availablePackages?.[0] ?? null;
         setSelectedPackage(def);
       })
@@ -67,15 +88,35 @@ export default function PaywallScreen() {
   const annual = offering?.annual ?? null;
   const monthly = offering?.monthly ?? null;
 
+  // El webhook de RevenueCat puede tardar entre 1 y ~10s en actualizar la DB.
+  // Hacemos polling hasta que premium_status sea activo o se agote el budget.
+  async function waitForPremiumActivation() {
+    if (!user) return;
+    const maxAttempts = 8;
+    const delayMs = 1500;
+    for (let i = 0; i < maxAttempts; i++) {
+      await new Promise(r => setTimeout(r, delayMs));
+      const { data } = await supabase
+        .from('profiles')
+        .select('premium_status')
+        .eq('id', user.id)
+        .maybeSingle();
+      const status = (data as any)?.premium_status;
+      if (status === 'active' || status === 'in_grace') {
+        await refreshProfile().catch(() => {});
+        return;
+      }
+    }
+    await refreshProfile().catch(() => {});
+  }
+
   async function handleSubscribe() {
     if (!selectedPackage) return;
     setPurchasing(true);
     try {
       const { customerInfo } = await Purchases.purchasePackage(selectedPackage);
       const isPro = !!customerInfo.entitlements.active['pro'];
-      // Refresh profile so usePremium picks up the webhook update.
-      // The webhook fires in 1-3 seconds; we wait briefly and refresh.
-      setTimeout(() => { refreshProfile().catch(() => {}); }, 1500);
+      waitForPremiumActivation();
       if (isPro) {
         Alert.alert('¡Bienvenido a Trocora Pro!', 'Tu suscripción está activa.');
       }
@@ -94,7 +135,7 @@ export default function PaywallScreen() {
     try {
       const info = await Purchases.restorePurchases();
       const isPro = !!info.entitlements.active['pro'];
-      setTimeout(() => { refreshProfile().catch(() => {}); }, 1500);
+      waitForPremiumActivation();
       Alert.alert(
         isPro ? 'Compras restauradas' : 'Sin compras activas',
         isPro ? 'Tu Trocora Pro quedó activo.' : 'No encontramos suscripciones activas en esta cuenta.',
@@ -108,6 +149,17 @@ export default function PaywallScreen() {
   }
 
   const annualMonthly = annual ? annualMonthlyPriceLabel(annual) : null;
+
+  const untilLabel = until
+    ? until.toLocaleDateString(undefined, { day: 'numeric', month: 'long', year: 'numeric' })
+    : null;
+
+  function openManageSubscription() {
+    const url = Platform.OS === 'ios'
+      ? 'https://apps.apple.com/account/subscriptions'
+      : 'https://play.google.com/store/account/subscriptions';
+    Linking.openURL(url).catch(() => {});
+  }
 
   return (
     <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
@@ -124,9 +176,13 @@ export default function PaywallScreen() {
             <Ionicons name="star" size={14} color="#FACC15" />
             <Text style={styles.heroBadgeText}>TROCORA PRO</Text>
           </View>
-          <Text style={styles.title}>Sacale el máximo a tu colección</Text>
+          <Text style={styles.title}>
+            {isPremium ? 'Ya sos parte de Trocora Pro' : 'Sacale el máximo a tu colección'}
+          </Text>
           <Text style={styles.subtitle}>
-            Funciones premium para coleccionistas y vendedores activos.
+            {isPremium
+              ? 'Disfrutá todos los beneficios premium incluidos en tu plan.'
+              : 'Funciones premium para coleccionistas y vendedores activos.'}
           </Text>
         </View>
 
@@ -144,6 +200,25 @@ export default function PaywallScreen() {
           ))}
         </View>
 
+        {isPremium ? (
+          <View style={styles.activeCard}>
+            <View style={styles.activeIconWrap}>
+              <Ionicons name="checkmark-circle" size={28} color="#4ADE80" />
+            </View>
+            <Text style={styles.activeTitle}>Suscripción activa</Text>
+            {untilLabel && (
+              <Text style={styles.activeDate}>Tu plan se renueva el {untilLabel}</Text>
+            )}
+            <TouchableOpacity style={styles.manageBtn} onPress={openManageSubscription} activeOpacity={0.85}>
+              <Ionicons name="settings-outline" size={16} color="#F1F5F9" />
+              <Text style={styles.manageBtnText}>Gestionar suscripción</Text>
+            </TouchableOpacity>
+            <Text style={styles.activeHint}>
+              Para cancelar o cambiar de plan, abrí los ajustes de tu tienda.
+            </Text>
+          </View>
+        ) : (
+        <>
         <View style={styles.plans}>
           {loadingOfferings ? (
             <ActivityIndicator color="#94A3B8" style={{ paddingVertical: 24 }} />
@@ -180,7 +255,7 @@ export default function PaywallScreen() {
                   </View>
                   {annual.product.introPrice && (
                     <Text style={styles.planTrial}>
-                      {annual.product.introPrice.periodNumberOfUnits} días gratis · Cancelá cuando quieras
+                      {introPeriodLabel(annual.product.introPrice)} gratis · Cancelá cuando quieras
                     </Text>
                   )}
                 </TouchableOpacity>
@@ -215,7 +290,7 @@ export default function PaywallScreen() {
             ? <ActivityIndicator size="small" color="#fff" />
             : <Text style={styles.ctaText}>
                 {selectedPackage?.product.introPrice
-                  ? `Empezar ${selectedPackage.product.introPrice.periodNumberOfUnits} días gratis`
+                  ? `Empezar ${introPeriodLabel(selectedPackage.product.introPrice)} gratis`
                   : 'Suscribirme'}
               </Text>}
         </TouchableOpacity>
@@ -227,6 +302,18 @@ export default function PaywallScreen() {
         <Text style={styles.legalText}>
           Se renueva automáticamente. Podés cancelar en cualquier momento desde la configuración de tu tienda (App Store / Google Play). La suscripción se cobra a tu cuenta de la tienda al confirmar la compra.
         </Text>
+
+        <View style={styles.legalLinksRow}>
+          <TouchableOpacity onPress={() => Linking.openURL('https://trocora.com/privacy')}>
+            <Text style={styles.legalLink}>Política de Privacidad</Text>
+          </TouchableOpacity>
+          <Text style={styles.legalLinkSep}>·</Text>
+          <TouchableOpacity onPress={() => Linking.openURL('https://trocora.com/terms')}>
+            <Text style={styles.legalLink}>Términos de Uso</Text>
+          </TouchableOpacity>
+        </View>
+        </>
+        )}
 
         <View style={{ height: 24 }} />
       </ScrollView>
@@ -301,4 +388,25 @@ const styles = StyleSheet.create({
   restoreText: { color: '#A5B4FC', fontSize: 13, fontWeight: '600' },
 
   legalText: { color: '#475569', fontSize: 11, lineHeight: 16, marginTop: 16, textAlign: 'center' },
+  legalLinksRow: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 8, marginTop: 10 },
+  legalLink: { color: '#6366F1', fontSize: 12, fontWeight: '600' },
+  legalLinkSep: { color: '#475569', fontSize: 12 },
+
+  activeCard: {
+    marginTop: 24,
+    backgroundColor: '#1E293B', borderRadius: 14,
+    borderWidth: 1, borderColor: '#4ADE8055',
+    padding: 20, alignItems: 'center',
+  },
+  activeIconWrap: { marginBottom: 8 },
+  activeTitle: { color: '#F1F5F9', fontSize: 17, fontWeight: '700' },
+  activeDate: { color: '#94A3B8', fontSize: 13, marginTop: 4, textAlign: 'center' },
+  manageBtn: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
+    marginTop: 16, paddingVertical: 12, paddingHorizontal: 18,
+    backgroundColor: '#334155', borderRadius: 10,
+    alignSelf: 'stretch',
+  },
+  manageBtnText: { color: '#F1F5F9', fontSize: 14, fontWeight: '600' },
+  activeHint: { color: '#64748B', fontSize: 11, marginTop: 12, textAlign: 'center', lineHeight: 16 },
 });

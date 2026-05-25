@@ -24,6 +24,9 @@ function RootNavigator() {
 
   useEffect(() => {
     if (purchasesConfigured.current) return;
+    // RC no funciona en Expo Go: no hay StoreKit nativo. Solo se inicializa
+    // en builds nativos (dev build, TestFlight, App Store).
+    if (Constants.appOwnership === 'expo') return;
     try {
       const keys = (Constants.expoConfig?.extra as any)?.revenuecat ?? {};
       const apiKey = Platform.OS === 'ios' ? keys.ios : keys.android;
