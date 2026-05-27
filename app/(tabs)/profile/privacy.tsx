@@ -1,15 +1,19 @@
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView } from 'react-native';
+import { View, Text, TouchableOpacity, ScrollView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/context/AuthContext';
+import { useTheme } from '@/context/ThemeContext';
 import { useDialog } from '@/lib/AppDialog';
+import { makeStyles } from '@/lib/theme';
 
 export default function PrivacyScreen() {
   const { signOut } = useAuth();
+  const { palette } = useTheme();
   const router = useRouter();
   const dialog = useDialog();
+  const styles = useStyles();
 
   function handleDeleteAccount() {
     dialog.confirm({
@@ -37,7 +41,7 @@ export default function PrivacyScreen() {
     <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
       <View style={styles.header}>
         <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
-          <Ionicons name="chevron-back" size={20} color="#6366F1" />
+          <Ionicons name="chevron-back" size={20} color={palette.primary} />
           <Text style={styles.back}>Perfil</Text>
         </TouchableOpacity>
         <Text style={styles.title}>Privacidad</Text>
@@ -58,7 +62,7 @@ export default function PrivacyScreen() {
             Si eliminas tu cuenta se borrarán de forma permanente tu perfil, colección, carpetas, intercambios, mensajes y foto. No se puede recuperar.
           </Text>
           <TouchableOpacity style={styles.deleteBtn} onPress={handleDeleteAccount} activeOpacity={0.8}>
-            <Ionicons name="trash-outline" size={16} color="#EF4444" />
+            <Ionicons name="trash-outline" size={16} color={palette.danger} />
             <Text style={styles.deleteText}>Eliminar mi cuenta</Text>
           </TouchableOpacity>
         </View>
@@ -67,31 +71,31 @@ export default function PrivacyScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#0F172A' },
+const useStyles = makeStyles((p) => ({
+  container: { flex: 1, backgroundColor: p.bg },
   header: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    padding: 16, borderBottomWidth: 1, borderBottomColor: '#1E293B',
+    padding: 16, borderBottomWidth: 1, borderBottomColor: p.surface,
   },
   backBtn: { flexDirection: 'row', alignItems: 'center', gap: 2, minWidth: 60 },
-  back: { color: '#6366F1', fontSize: 15 },
-  title: { color: '#F1F5F9', fontSize: 16, fontWeight: '700' },
+  back: { color: p.primary, fontSize: 15 },
+  title: { color: p.textPrimary, fontSize: 16, fontWeight: '700' },
   scroll: { padding: 20, gap: 8 },
 
   sectionLabel: {
-    color: '#94A3B8', fontSize: 12, fontWeight: '700',
+    color: p.textSecondary, fontSize: 12, fontWeight: '700',
     textTransform: 'uppercase', letterSpacing: 0.5, marginTop: 12, marginBottom: 4,
   },
   card: {
-    backgroundColor: '#1E293B', borderRadius: 14, borderWidth: 1, borderColor: '#334155',
+    backgroundColor: p.surface, borderRadius: 14, borderWidth: 1, borderColor: p.border,
     padding: 14, gap: 12,
   },
-  cardText: { color: '#94A3B8', fontSize: 13, lineHeight: 19 },
+  cardText: { color: p.textSecondary, fontSize: 13, lineHeight: 19 },
 
   deleteBtn: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6,
     paddingVertical: 12, borderRadius: 10,
-    borderWidth: 1, borderColor: '#EF444455', backgroundColor: '#EF444411',
+    borderWidth: 1, borderColor: p.danger + '55', backgroundColor: p.danger + '11',
   },
-  deleteText: { color: '#EF4444', fontSize: 14, fontWeight: '600' },
-});
+  deleteText: { color: p.danger, fontSize: 14, fontWeight: '600' },
+}));

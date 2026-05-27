@@ -1,7 +1,7 @@
 import { useCallback, useState, useMemo, useRef, useEffect } from 'react';
 import { useFocusEffect, useRouter } from 'expo-router';
 import {
-  View, Text, FlatList, TouchableOpacity, StyleSheet,
+  View, Text, FlatList, TouchableOpacity,
   TextInput, ActivityIndicator,
   Dimensions, ScrollView, Modal, RefreshControl,
 } from 'react-native';
@@ -10,6 +10,7 @@ import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/context/AuthContext';
+import { useTheme } from '@/context/ThemeContext';
 import { usePremium } from '@/lib/usePremium';
 import { useDialog } from '@/lib/AppDialog';
 import type { CardCollection, TCGGame, CardCondition } from '@/types/database';
@@ -19,6 +20,7 @@ import { PhotoLightbox } from '@/lib/PhotoLightbox';
 import { addToWatchlist, removeFromWatchlist, isInWatchlist } from '@/lib/watchlist';
 import { resolveEnabledGames } from '@/lib/enabledGames';
 import { REGION_LABEL } from '@/lib/regions';
+import { makeStyles } from '@/lib/theme';
 
 type IoniconName = React.ComponentProps<typeof Ionicons>['name'];
 
@@ -78,8 +80,8 @@ type CardGroup = {
   set_name: string | null;
   image_url: string | null;
   is_foil: boolean;
-  listings: ExploreCard[]; // ordenadas por created_at desc
-  regionSet: Set<string>;  // unión de regiones de todos los publicadores
+  listings: ExploreCard[];
+  regionSet: Set<string>;
 };
 
 function groupKey(c: ExploreCard): string {
@@ -110,9 +112,11 @@ function activeFilterCount(f: AdvancedFilters): number {
 
 export default function ExploreScreen() {
   const { user, profile } = useAuth();
+  const { palette } = useTheme();
   const router = useRouter();
   const dialog = useDialog();
   const { isPremium } = usePremium();
+  const styles = useStyles();
   const [allCards, setAllCards] = useState<ExploreCard[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
@@ -179,14 +183,12 @@ export default function ExploreScreen() {
       (c.profiles?.regions ?? []).forEach(r => g.regionSet.add(r));
       if (!g.image_url && c.image_url) g.image_url = c.image_url;
     }
-    // Inside each group, boosted listings appear first, then by recency.
     for (const g of map.values()) {
       g.listings.sort((a, b) => {
         if (!!a.is_boosted !== !!b.is_boosted) return b.is_boosted ? 1 : -1;
         return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
       });
     }
-    // Group position: only recency (no boost effect to avoid free piggyback).
     return Array.from(map.values()).sort(
       (a, b) =>
         new Date(b.listings[0].created_at).getTime() -
@@ -206,7 +208,6 @@ export default function ExploreScreen() {
       const q = search.toLowerCase();
       result = result.filter(g => g.card_name.toLowerCase().includes(q));
     }
-    // Advanced filters (Pro). For non-premium they stay empty so they are no-ops.
     if (isPremium) {
       const setQ = filters.setName.trim().toLowerCase();
       if (filters.conditions.size > 0 || filters.foilOnly || setQ) {
@@ -239,7 +240,7 @@ export default function ExploreScreen() {
       </View>
 
       {loading ? (
-        <ActivityIndicator style={{ flex: 1 }} color="#94A3B8" />
+        <ActivityIndicator style={{ flex: 1 }} color={palette.textSecondary} />
       ) : (
         <FlatList
           data={cards}
@@ -261,7 +262,7 @@ export default function ExploreScreen() {
                 if (!isPremium) {
                   dialog.confirm({
                     title: 'Filtros avanzados son Pro',
-                    message: 'Filtrá por precio, condición, foil y set con Trocora Pro.',
+                    message: 'Filtra por precio, condición, foil y set con Trocora Pro.',
                     confirmText: 'Pasarme a Pro',
                     cancelText: 'Más tarde',
                     onConfirm: () => router.push('/paywall'),
@@ -279,7 +280,7 @@ export default function ExploreScreen() {
           ListEmptyComponent={<EmptyExplore />}
           contentContainerStyle={{ paddingHorizontal: 8, paddingBottom: 20 }}
           refreshControl={
-            <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor="#6366F1" />
+            <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={palette.primary} />
           }
         />
       )}
@@ -308,8 +309,6 @@ export default function ExploreScreen() {
   );
 }
 
-// ─── Header ───────────────────────────────────────────────────────────────────
-
 function ExploreHeader({
   search, onSearchChange, uniqueGames, filterGame, setFilterGame,
   onlyMyRegions, setOnlyMyRegions, hasRegions,
@@ -327,6 +326,8 @@ function ExploreHeader({
   onOpenFilters: () => void;
   onClearFilters: () => void;
 }) {
+  const styles = useStyles();
+  const { palette } = useTheme();
   return (
     <>
       <View style={styles.searchRow}>
@@ -335,14 +336,14 @@ function ExploreHeader({
           value={search}
           onChangeText={onSearchChange}
           placeholder="Buscar carta..."
-          placeholderTextColor="#475569"
+          placeholderTextColor={palette.textMuted}
         />
         <TouchableOpacity
           style={[styles.filtersBtn, filterCount > 0 && styles.filtersBtnActive]}
           onPress={onOpenFilters}
           activeOpacity={0.7}
         >
-          <Ionicons name="options-outline" size={18} color={filterCount > 0 ? '#0F172A' : '#A5B4FC'} />
+          <Ionicons name="options-outline" size={18} color={filterCount > 0 ? palette.bg : palette.primary} />
           {filterCount > 0 && (
             <View style={styles.filterCountBadge}>
               <Text style={styles.filterCountBadgeText}>{filterCount}</Text>
@@ -353,7 +354,7 @@ function ExploreHeader({
 
       {filterCount > 0 && (
         <TouchableOpacity onPress={onClearFilters} style={styles.clearFiltersRow}>
-          <Ionicons name="close-circle" size={14} color="#94A3B8" />
+          <Ionicons name="close-circle" size={14} color={palette.textSecondary} />
           <Text style={styles.clearFiltersText}>Limpiar filtros ({filterCount})</Text>
         </TouchableOpacity>
       )}
@@ -368,7 +369,7 @@ function ExploreHeader({
             style={[styles.filterChip, onlyMyRegions && styles.filterChipActive]}
             onPress={() => setOnlyMyRegions(!onlyMyRegions)}
           >
-            <Ionicons name="location-outline" size={15} color={onlyMyRegions ? '#fff' : '#A5B4FC'} />
+            <Ionicons name="location-outline" size={15} color={onlyMyRegions ? '#fff' : palette.primary} />
             <Text style={[styles.filterChipText, onlyMyRegions && styles.filterChipTextActive]}>
               Mis regiones
             </Text>
@@ -394,9 +395,8 @@ function ExploreHeader({
   );
 }
 
-// ─── Card item ────────────────────────────────────────────────────────────────
-
 function CardItem({ group, onPress }: { group: CardGroup; onPress: () => void }) {
+  const styles = useStyles();
   const gameIcon = GAME_ICON[group.game];
   const count = group.listings.length;
   return (
@@ -422,13 +422,13 @@ function CardItem({ group, onPress }: { group: CardGroup; onPress: () => void })
   );
 }
 
-// ─── Card detail modal ────────────────────────────────────────────────────────
-
 function CardDetailModal({ group, myRegions, onClose, onPropose }: { group: CardGroup | null; myRegions: Set<string>; onClose: () => void; onPropose: (listing: ExploreCard) => void }) {
   const router = useRouter();
   const { user } = useAuth();
+  const { palette } = useTheme();
   const { isPremium } = usePremium();
   const dialog = useDialog();
+  const styles = useStyles();
   const [lightboxPhotos, setLightboxPhotos] = useState<string[]>([]);
   const [watching, setWatching] = useState(false);
   const [watchingId, setWatchingId] = useState<string | null>(null);
@@ -476,7 +476,7 @@ function CardDetailModal({ group, myRegions, onClose, onPropose }: { group: Card
       onClose();
       dialog.confirm({
         title: 'Watchlist es Pro',
-        message: 'Recibí push cuando alguien publique esta carta. Disponible con Trocora Pro.',
+        message: 'Recibe push cuando alguien publique esta carta. Disponible con Trocora Pro.',
         confirmText: 'Pasarme a Pro',
         cancelText: 'Más tarde',
         onConfirm: () => router.push('/paywall'),
@@ -561,10 +561,10 @@ function CardDetailModal({ group, myRegions, onClose, onPropose }: { group: Card
                     <Ionicons
                       name={watching ? 'heart' : 'heart-outline'}
                       size={16}
-                      color={watching ? '#fff' : '#A5B4FC'}
+                      color={watching ? '#fff' : palette.primary}
                     />
                     <Text style={[styles.watchBtnText, watching && styles.watchBtnTextActive]}>
-                      {watching ? 'En watchlist' : 'Avisame'}
+                      {watching ? 'En watchlist' : 'Avísame'}
                     </Text>
                   </TouchableOpacity>
                 )}
@@ -596,7 +596,7 @@ function CardDetailModal({ group, myRegions, onClose, onPropose }: { group: Card
                       {l.profiles?.avatar_url ? (
                         <Image source={{ uri: l.profiles.avatar_url }} style={styles.ownerAvatarImg} />
                       ) : (
-                        <Ionicons name="person-outline" size={18} color="#64748B" />
+                        <Ionicons name="person-outline" size={18} color={palette.textMuted} />
                       )}
                     </TouchableOpacity>
                     <View style={{ flex: 1 }}>
@@ -604,7 +604,7 @@ function CardDetailModal({ group, myRegions, onClose, onPropose }: { group: Card
                         <Text style={styles.ownerUsername}>@{l.profiles?.username ?? '—'}</Text>
                         {l.is_boosted && (
                           <View style={styles.boostChip}>
-                            <Ionicons name="rocket" size={9} color="#0F172A" />
+                            <Ionicons name="rocket" size={9} color={palette.bg} />
                             <Text style={styles.boostChipText}>Destacado</Text>
                           </View>
                         )}
@@ -620,7 +620,7 @@ function CardDetailModal({ group, myRegions, onClose, onPropose }: { group: Card
                         {l.price_reference != null && (
                           <>
                             <Text style={styles.listingMetaDot}>·</Text>
-                            <Text style={[styles.listingMeta, { color: '#4ADE80' }]}>
+                            <Text style={[styles.listingMeta, { color: palette.successAlt }]}>
                               ${l.price_reference} {(l.price_reference_currency ?? 'usd').toUpperCase()}
                             </Text>
                           </>
@@ -639,7 +639,7 @@ function CardDetailModal({ group, myRegions, onClose, onPropose }: { group: Card
                         onPress={() => setLightboxPhotos(l.custom_photos)}
                         hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
                       >
-                        <Ionicons name="camera" size={14} color="#A5B4FC" />
+                        <Ionicons name="camera" size={14} color={palette.primary} />
                         <Text style={styles.photoBtnText}>{l.custom_photos.length}</Text>
                       </TouchableOpacity>
                     )}
@@ -663,19 +663,17 @@ function CardDetailModal({ group, myRegions, onClose, onPropose }: { group: Card
   );
 }
 
-// ─── Empty state ──────────────────────────────────────────────────────────────
-
 function EmptyExplore() {
+  const styles = useStyles();
+  const { palette } = useTheme();
   return (
     <View style={styles.empty}>
-      <Ionicons name="compass-outline" size={64} color="#334155" style={styles.emptyIcon} />
+      <Ionicons name="compass-outline" size={64} color={palette.surfaceAlt} style={styles.emptyIcon} />
       <Text style={styles.emptyTitle}>Nada por aquí</Text>
       <Text style={styles.emptyText}>Aún no hay cartas publicadas. Vuelve más tarde.</Text>
     </View>
   );
 }
-
-// ─── Advanced filters modal ───────────────────────────────────────────────────
 
 const ALL_CONDITIONS: { value: CardCondition; label: string }[] = [
   { value: 'mint', label: 'Nueva' },
@@ -695,6 +693,9 @@ function AdvancedFiltersModal({
   onClear: () => void;
   onClose: () => void;
 }) {
+  const styles = useStyles();
+  const { palette } = useTheme();
+
   function toggleCondition(c: CardCondition) {
     const next = new Set(filters.conditions);
     next.has(c) ? next.delete(c) : next.add(c);
@@ -738,7 +739,7 @@ function AdvancedFiltersModal({
                 value={filters.setName}
                 onChangeText={v => onChange({ ...filters, setName: v })}
                 placeholder="Ej: Base Set, Modern Horizons..."
-                placeholderTextColor="#475569"
+                placeholderTextColor={palette.textMuted}
               />
 
               <View style={styles.foilRow}>
@@ -747,13 +748,13 @@ function AdvancedFiltersModal({
                   <Text style={styles.foilHint}>Mostrar únicamente cartas foil</Text>
                 </View>
                 <TouchableOpacity
-                  style={[styles.foilToggle, filters.foilOnly && styles.foilToggleActive]}
+                  style={styles.foilToggle}
                   onPress={() => onChange({ ...filters, foilOnly: !filters.foilOnly })}
                 >
                   <Ionicons
                     name={filters.foilOnly ? 'checkmark-circle' : 'ellipse-outline'}
                     size={22}
-                    color={filters.foilOnly ? '#FACC15' : '#64748B'}
+                    color={filters.foilOnly ? palette.warning : palette.textMuted}
                   />
                 </TouchableOpacity>
               </View>
@@ -769,29 +770,27 @@ function AdvancedFiltersModal({
   );
 }
 
-// ─── Styles ───────────────────────────────────────────────────────────────────
-
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#0F172A' },
+const useStyles = makeStyles((p) => ({
+  container: { flex: 1, backgroundColor: p.bg },
   header: { padding: 20, paddingTop: 16 },
-  title: { fontSize: 24, fontWeight: '800', color: '#F1F5F9' },
-  subtitle: { fontSize: 13, color: '#64748B', marginTop: 2 },
+  title: { fontSize: 24, fontWeight: '800', color: p.textPrimary },
+  subtitle: { fontSize: 13, color: p.textMuted, marginTop: 2 },
 
   searchRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 12 },
   searchInput: {
     marginHorizontal: 0,
-    backgroundColor: '#1E293B', borderWidth: 1, borderColor: '#334155',
-    borderRadius: 12, padding: 12, fontSize: 14, color: '#F1F5F9',
+    backgroundColor: p.surface, borderWidth: 1, borderColor: p.border,
+    borderRadius: 12, padding: 12, fontSize: 14, color: p.textPrimary,
   },
   filtersBtn: {
     width: 44, height: 44, borderRadius: 12,
-    backgroundColor: '#1E293B', borderWidth: 1, borderColor: '#334155',
+    backgroundColor: p.surface, borderWidth: 1, borderColor: p.border,
     alignItems: 'center', justifyContent: 'center',
   },
-  filtersBtnActive: { backgroundColor: '#FACC15', borderColor: '#FACC15' },
+  filtersBtnActive: { backgroundColor: p.warning, borderColor: p.warning },
   filterCountBadge: {
     position: 'absolute', top: -4, right: -4,
-    backgroundColor: '#6366F1', borderRadius: 9, minWidth: 18, height: 18,
+    backgroundColor: p.primary, borderRadius: 9, minWidth: 18, height: 18,
     alignItems: 'center', justifyContent: 'center', paddingHorizontal: 4,
   },
   filterCountBadgeText: { color: '#fff', fontSize: 10, fontWeight: '800' },
@@ -799,189 +798,167 @@ const styles = StyleSheet.create({
     flexDirection: 'row', alignItems: 'center', gap: 4,
     alignSelf: 'flex-start', marginBottom: 12, paddingVertical: 4,
   },
-  clearFiltersText: { color: '#94A3B8', fontSize: 12, fontWeight: '600' },
+  clearFiltersText: { color: p.textSecondary, fontSize: 12, fontWeight: '600' },
   filterRow: { gap: 8, paddingBottom: 12 },
   filterChip: {
     flexDirection: 'row', alignItems: 'center', gap: 5,
     paddingHorizontal: 12, paddingVertical: 6,
-    borderRadius: 20, borderWidth: 1, borderColor: '#334155', backgroundColor: '#1E293B',
+    borderRadius: 20, borderWidth: 1, borderColor: p.border, backgroundColor: p.surface,
   },
-  filterChipActive: { backgroundColor: '#6366F1', borderColor: '#6366F1' },
+  filterChipActive: { backgroundColor: p.primary, borderColor: p.primary },
   filterChipLogo: { width: 18, height: 18 },
-  filterChipText: { color: '#64748B', fontSize: 13 },
+  filterChipText: { color: p.textMuted, fontSize: 13 },
   filterChipTextActive: { color: '#fff' },
 
   thumb: {
     width: CARD_WIDTH, margin: 4, alignItems: 'center',
-    backgroundColor: '#1E293B', borderRadius: 10, padding: 8,
-    borderWidth: 1, borderColor: '#334155',
+    backgroundColor: p.surface, borderRadius: 10, padding: 8,
+    borderWidth: 1, borderColor: p.border,
   },
   thumbImg: { width: '100%', aspectRatio: 0.715, borderRadius: 6 },
   thumbPlaceholder: {
     width: '100%', aspectRatio: 0.715, borderRadius: 6,
-    backgroundColor: '#0F172A', alignItems: 'center', justifyContent: 'center',
+    backgroundColor: p.bg, alignItems: 'center', justifyContent: 'center',
   },
   thumbFooter: { flexDirection: 'row', alignItems: 'center', marginTop: 4, gap: 3, width: '100%' },
-  thumbNum: { color: '#64748B', fontSize: 9, fontWeight: '600', flexShrink: 0 },
-  thumbName: { color: '#F1F5F9', fontSize: 9, fontWeight: '600', flexShrink: 1 },
-  ownerBadge: {
-    position: 'absolute', bottom: 24, right: 0, left: 0,
-    backgroundColor: '#00000066', paddingHorizontal: 4, paddingVertical: 2,
-    borderBottomLeftRadius: 10, borderBottomRightRadius: 10,
-  },
-  ownerText: { color: '#94A3B8', fontSize: 8, textAlign: 'center' },
+  thumbNum: { color: p.textMuted, fontSize: 9, fontWeight: '600', flexShrink: 0 },
+  thumbName: { color: p.textPrimary, fontSize: 9, fontWeight: '600', flexShrink: 1 },
   countBadge: {
     position: 'absolute', top: 6, right: 6,
     flexDirection: 'row', alignItems: 'center', gap: 2,
-    backgroundColor: '#6366F1', paddingHorizontal: 6, paddingVertical: 2,
+    backgroundColor: p.primary, paddingHorizontal: 6, paddingVertical: 2,
     borderRadius: 8,
   },
   countText: { color: '#fff', fontSize: 9, fontWeight: '700' },
   boostChip: {
     flexDirection: 'row', alignItems: 'center', gap: 3,
-    backgroundColor: '#FACC15', borderRadius: 8,
+    backgroundColor: p.warning, borderRadius: 8,
     paddingHorizontal: 6, paddingVertical: 2,
   },
-  boostChipText: { color: '#0F172A', fontSize: 9, fontWeight: '800', letterSpacing: 0.3 },
+  boostChipText: { color: p.bg, fontSize: 9, fontWeight: '800', letterSpacing: 0.3 },
 
   modalOverlay: { flex: 1, backgroundColor: '#00000088', justifyContent: 'flex-end' },
   modalSheet: {
-    backgroundColor: '#1E293B', borderTopLeftRadius: 20, borderTopRightRadius: 20,
+    backgroundColor: p.surface, borderTopLeftRadius: 20, borderTopRightRadius: 20,
     padding: 20, paddingBottom: 36,
   },
   modalHandle: {
-    width: 36, height: 4, borderRadius: 2, backgroundColor: '#334155',
+    width: 36, height: 4, borderRadius: 2, backgroundColor: p.surfaceAlt,
     alignSelf: 'center', marginBottom: 16,
   },
   modalContent: { flexDirection: 'row', gap: 16, marginBottom: 16 },
   modalImage: { width: 120, height: 168, borderRadius: 10 },
   modalImagePlaceholder: {
     width: 120, height: 168, borderRadius: 10,
-    backgroundColor: '#0F172A', alignItems: 'center', justifyContent: 'center',
+    backgroundColor: p.bg, alignItems: 'center', justifyContent: 'center',
   },
   modalInfo: { flex: 1, gap: 6 },
   modalGameRow: { flexDirection: 'row', alignItems: 'center', gap: 5 },
   modalGameLogo: { width: 16, height: 16 },
   modalGameText: { fontSize: 12, fontWeight: '600' },
-  modalCardNum: { color: '#64748B', fontSize: 12 },
-  modalCardName: { fontSize: 18, fontWeight: '800', color: '#F1F5F9', lineHeight: 22 },
-  modalSetName: { fontSize: 12, color: '#64748B' },
+  modalCardNum: { color: p.textMuted, fontSize: 12 },
+  modalCardName: { fontSize: 18, fontWeight: '800', color: p.textPrimary, lineHeight: 22 },
+  modalSetName: { fontSize: 12, color: p.textMuted },
   modalSummary: { marginTop: 8 },
-  modalSummaryPrice: { color: '#4ADE80', fontSize: 14, fontWeight: '700' },
+  modalSummaryPrice: { color: p.successAlt, fontSize: 14, fontWeight: '700' },
   watchBtn: {
     flexDirection: 'row', alignItems: 'center', gap: 6,
     alignSelf: 'flex-start',
-    backgroundColor: 'rgba(99,102,241,0.15)',
-    borderWidth: 1, borderColor: 'rgba(99,102,241,0.4)',
+    backgroundColor: p.primaryMuted,
+    borderWidth: 1, borderColor: p.primary,
     borderRadius: 10, paddingHorizontal: 12, paddingVertical: 8,
     marginTop: 10,
   },
-  watchBtnActive: { backgroundColor: '#6366F1', borderColor: '#6366F1' },
-  watchBtnText: { color: '#A5B4FC', fontSize: 12, fontWeight: '700' },
+  watchBtnActive: { backgroundColor: p.primary, borderColor: p.primary },
+  watchBtnText: { color: p.primary, fontSize: 12, fontWeight: '700' },
   watchBtnTextActive: { color: '#fff' },
-  modalBadges: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
-  badgePublished: {
-    flexDirection: 'row', alignItems: 'center', gap: 4,
-    backgroundColor: '#4ADE8022', borderRadius: 6, paddingHorizontal: 8, paddingVertical: 4,
-  },
-  badgePublishedText: { color: '#4ADE80', fontSize: 12, fontWeight: '600' },
-  badgePrice: {
-    flexDirection: 'row', alignItems: 'center', gap: 4,
-    backgroundColor: '#4ADE8022', borderRadius: 6, paddingHorizontal: 8, paddingVertical: 4,
-  },
-  badgePriceText: { color: '#4ADE80', fontSize: 12, fontWeight: '600' },
   badgeFoil: {
     backgroundColor: '#A78BFA22', borderRadius: 6, paddingHorizontal: 8, paddingVertical: 4,
   },
   badgeFoilText: { color: '#A78BFA', fontSize: 12, fontWeight: '600' },
-  modalMetaRow: { flexDirection: 'row', gap: 8, alignItems: 'center' },
-  modalMetaLabel: { color: '#64748B', fontSize: 12, width: 56 },
-  modalMetaValue: { color: '#F1F5F9', fontSize: 12, fontWeight: '600' },
-  modalNotes: { color: '#94A3B8', fontSize: 12, fontStyle: 'italic', marginTop: 4 },
 
   listingsHeader: {
-    color: '#94A3B8', fontSize: 12, fontWeight: '700',
+    color: p.textSecondary, fontSize: 12, fontWeight: '700',
     textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 8,
   },
   listingsScroll: { maxHeight: 320 },
   listingRow: {
     flexDirection: 'row', alignItems: 'center', gap: 12,
-    backgroundColor: '#0F172A', borderRadius: 12, padding: 10,
-    borderWidth: 1, borderColor: '#334155',
+    backgroundColor: p.bg, borderRadius: 12, padding: 10,
+    borderWidth: 1, borderColor: p.border,
   },
   ownerAvatar: {
     width: 40, height: 40, borderRadius: 20,
-    backgroundColor: '#1E293B', borderWidth: 1, borderColor: '#334155',
+    backgroundColor: p.surface, borderWidth: 1, borderColor: p.border,
     alignItems: 'center', justifyContent: 'center', overflow: 'hidden',
   },
   ownerAvatarImg: { width: 40, height: 40 },
-  ownerUsername: { color: '#A5B4FC', fontSize: 14, fontWeight: '700' },
+  ownerUsername: { color: p.primary, fontSize: 14, fontWeight: '700' },
   ownerUsernameRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  ownerSince: { color: '#64748B', fontSize: 11, marginTop: 1 },
+  ownerSince: { color: p.textMuted, fontSize: 11, marginTop: 1 },
   listingMetaRow: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 2, flexWrap: 'wrap' },
   photoBtn: {
     flexDirection: 'row', alignItems: 'center', gap: 3,
-    backgroundColor: 'rgba(99,102,241,0.15)', borderRadius: 8,
+    backgroundColor: p.primaryMuted, borderRadius: 8,
     paddingHorizontal: 8, paddingVertical: 6,
-    borderWidth: 1, borderColor: 'rgba(99,102,241,0.4)',
+    borderWidth: 1, borderColor: p.primary,
   },
-  photoBtnText: { color: '#A5B4FC', fontSize: 11, fontWeight: '700' },
-  listingMeta: { color: '#94A3B8', fontSize: 11 },
-  listingMetaDot: { color: '#475569', fontSize: 11 },
+  photoBtnText: { color: p.primary, fontSize: 11, fontWeight: '700' },
+  listingMeta: { color: p.textSecondary, fontSize: 11 },
+  listingMetaDot: { color: p.textMuted, fontSize: 11 },
   listingBtn: {
     width: 36, height: 36, borderRadius: 18,
-    backgroundColor: '#6366F1', alignItems: 'center', justifyContent: 'center',
+    backgroundColor: p.primary, alignItems: 'center', justifyContent: 'center',
   },
 
   empty: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 32, paddingTop: 60 },
   emptyIcon: { marginBottom: 16 },
-  emptyTitle: { fontSize: 20, fontWeight: '700', color: '#F1F5F9' },
-  emptyText: { fontSize: 14, color: '#64748B', textAlign: 'center', marginTop: 8 },
+  emptyTitle: { fontSize: 20, fontWeight: '700', color: p.textPrimary },
+  emptyText: { fontSize: 14, color: p.textMuted, textAlign: 'center', marginTop: 8 },
 
   filtersSheet: {
-    backgroundColor: '#0F172A', borderTopLeftRadius: 20, borderTopRightRadius: 20,
+    backgroundColor: p.bg, borderTopLeftRadius: 20, borderTopRightRadius: 20,
     padding: 20, paddingBottom: 28,
-    borderTopWidth: 1, borderColor: '#334155',
+    borderTopWidth: 1, borderColor: p.border,
   },
   filtersHeader: {
     flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
     marginBottom: 14,
   },
-  filtersTitle: { color: '#F1F5F9', fontSize: 20, fontWeight: '800' },
-  filtersClear: { color: '#A5B4FC', fontSize: 13, fontWeight: '600' },
+  filtersTitle: { color: p.textPrimary, fontSize: 20, fontWeight: '800' },
+  filtersClear: { color: p.primary, fontSize: 13, fontWeight: '600' },
   filtersGroupLabel: {
-    color: '#64748B', fontSize: 11, fontWeight: '700',
+    color: p.textMuted, fontSize: 11, fontWeight: '700',
     textTransform: 'uppercase', letterSpacing: 0.5,
     marginBottom: 8, marginTop: 12,
   },
   conditionsWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
   conditionChip: {
     paddingHorizontal: 12, paddingVertical: 7,
-    borderRadius: 10, borderWidth: 1, borderColor: '#334155',
-    backgroundColor: '#1E293B',
+    borderRadius: 10, borderWidth: 1, borderColor: p.border,
+    backgroundColor: p.surface,
   },
-  conditionChipActive: { backgroundColor: '#6366F1', borderColor: '#6366F1' },
-  conditionChipText: { color: '#94A3B8', fontSize: 13, fontWeight: '600' },
+  conditionChipActive: { backgroundColor: p.primary, borderColor: p.primary },
+  conditionChipText: { color: p.textSecondary, fontSize: 13, fontWeight: '600' },
   conditionChipTextActive: { color: '#fff' },
   setInput: {
-    backgroundColor: '#1E293B', borderRadius: 10,
-    borderWidth: 1, borderColor: '#334155',
+    backgroundColor: p.surface, borderRadius: 10,
+    borderWidth: 1, borderColor: p.border,
     paddingHorizontal: 12, paddingVertical: 10,
-    color: '#F1F5F9', fontSize: 14,
+    color: p.textPrimary, fontSize: 14,
   },
   foilRow: {
     flexDirection: 'row', alignItems: 'center',
-    backgroundColor: '#1E293B', borderRadius: 12,
-    borderWidth: 1, borderColor: '#334155',
+    backgroundColor: p.surface, borderRadius: 12,
+    borderWidth: 1, borderColor: p.border,
     padding: 14, marginTop: 16,
   },
-  foilLabel: { color: '#F1F5F9', fontSize: 14, fontWeight: '600' },
-  foilHint: { color: '#64748B', fontSize: 12, marginTop: 2 },
+  foilLabel: { color: p.textPrimary, fontSize: 14, fontWeight: '600' },
+  foilHint: { color: p.textMuted, fontSize: 12, marginTop: 2 },
   foilToggle: { padding: 4 },
-  foilToggleActive: {},
   applyBtn: {
-    marginTop: 18, backgroundColor: '#6366F1', borderRadius: 12,
+    marginTop: 18, backgroundColor: p.primary, borderRadius: 12,
     paddingVertical: 14, alignItems: 'center',
   },
   applyBtnText: { color: '#fff', fontSize: 15, fontWeight: '700' },
-});
+}));

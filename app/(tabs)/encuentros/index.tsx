@@ -1,7 +1,7 @@
 import { useCallback, useState, useRef } from 'react';
 import { useFocusEffect, useRouter } from 'expo-router';
 import {
-  View, Text, FlatList, TouchableOpacity, StyleSheet,
+  View, Text, FlatList, TouchableOpacity,
   ActivityIndicator, RefreshControl,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -9,6 +9,8 @@ import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/context/AuthContext';
+import { useTheme } from '@/context/ThemeContext';
+import { makeStyles } from '@/lib/theme';
 import type { Meetup } from '@/types/database';
 
 type MeetupWithProfiles = Meetup & {
@@ -16,17 +18,11 @@ type MeetupWithProfiles = Meetup & {
   receiver: { username: string; avatar_url: string | null } | null;
 };
 
-const STATUS_LABEL: Record<string, { label: string; color: string }> = {
-  pending:   { label: 'Pendiente',  color: '#FACC15' },
-  countered: { label: 'Pendiente',  color: '#FACC15' },
-  confirmed: { label: 'Confirmado', color: '#4ADE80' },
-  completed: { label: 'Completado', color: '#64748B' },
-  cancelled: { label: 'Cancelado',  color: '#EF4444' },
-};
-
 export default function EncuentrosScreen() {
   const { user } = useAuth();
+  const { palette } = useTheme();
   const router = useRouter();
+  const styles = useStyles();
   const [meetups, setMeetups] = useState<MeetupWithProfiles[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -65,7 +61,7 @@ export default function EncuentrosScreen() {
       </View>
 
       {loading ? (
-        <ActivityIndicator style={{ flex: 1 }} color="#94A3B8" />
+        <ActivityIndicator style={{ flex: 1 }} color={palette.textSecondary} />
       ) : (
         <FlatList
           data={meetups}
@@ -80,7 +76,7 @@ export default function EncuentrosScreen() {
           )}
           ListEmptyComponent={<EmptyState />}
           refreshControl={
-            <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor="#6366F1" />
+            <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={palette.primary} />
           }
         />
       )}
@@ -93,12 +89,21 @@ function MeetupRow({ meetup, isReceived, onPress }: {
   isReceived: boolean;
   onPress: () => void;
 }) {
+  const styles = useStyles();
+  const { palette } = useTheme();
+  const statusMap: Record<string, { label: string; color: string }> = {
+    pending:   { label: 'Pendiente',  color: palette.warning },
+    countered: { label: 'Pendiente',  color: palette.warning },
+    confirmed: { label: 'Confirmado', color: palette.successAlt },
+    completed: { label: 'Completado', color: palette.textMuted },
+    cancelled: { label: 'Cancelado',  color: palette.danger },
+  };
   const other = isReceived ? meetup.proposer : meetup.receiver;
-  const status = STATUS_LABEL[meetup.status] ?? { label: meetup.status, color: '#94A3B8' };
+  const status = statusMap[meetup.status] ?? { label: meetup.status, color: palette.textSecondary };
   const dateStr = new Date(meetup.created_at)
     .toLocaleDateString('es-MX', { day: 'numeric', month: 'short' });
   const dirIcon = isReceived ? 'arrow-down-circle' : 'arrow-up-circle';
-  const dirColor = isReceived ? '#4ADE80' : '#A5B4FC';
+  const dirColor = isReceived ? palette.successAlt : palette.primary;
   const dirLabel = isReceived ? 'Recibido' : 'Enviado';
 
   return (
@@ -107,10 +112,10 @@ function MeetupRow({ meetup, isReceived, onPress }: {
         {other?.avatar_url ? (
           <Image source={{ uri: other.avatar_url }} style={styles.avatar} />
         ) : (
-          <Ionicons name="person-outline" size={20} color="#64748B" />
+          <Ionicons name="person-outline" size={20} color={palette.textMuted} />
         )}
         <View style={[styles.dirBadge, { backgroundColor: dirColor }]}>
-          <Ionicons name={dirIcon} size={14} color="#0F172A" />
+          <Ionicons name={dirIcon} size={14} color={palette.bg} />
         </View>
       </View>
       <View style={styles.rowInfo}>
@@ -125,15 +130,17 @@ function MeetupRow({ meetup, isReceived, onPress }: {
           <Text style={styles.rowDate}>· {dateStr}</Text>
         </View>
       </View>
-      <Ionicons name="chevron-forward-outline" size={16} color="#475569" />
+      <Ionicons name="chevron-forward-outline" size={16} color={palette.textMuted} />
     </TouchableOpacity>
   );
 }
 
 function EmptyState() {
+  const styles = useStyles();
+  const { palette } = useTheme();
   return (
     <View style={styles.empty}>
-      <Ionicons name="swap-horizontal-outline" size={56} color="#334155" style={{ marginBottom: 12 }} />
+      <Ionicons name="swap-horizontal-outline" size={56} color={palette.surfaceAlt} style={{ marginBottom: 12 }} />
       <Text style={styles.emptyTitle}>Sin intercambios</Text>
       <Text style={styles.emptyText}>
         Explora cartas de otros coleccionistas y propón un intercambio
@@ -142,18 +149,18 @@ function EmptyState() {
   );
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#0F172A' },
+const useStyles = makeStyles((p) => ({
+  container: { flex: 1, backgroundColor: p.bg },
   header: { padding: 20, paddingTop: 16 },
-  title: { fontSize: 24, fontWeight: '800', color: '#F1F5F9' },
+  title: { fontSize: 24, fontWeight: '800', color: p.textPrimary },
 
   row: {
     flexDirection: 'row', alignItems: 'center', gap: 12,
-    backgroundColor: '#1E293B', borderRadius: 14, borderWidth: 1, borderColor: '#334155', padding: 14,
+    backgroundColor: p.surface, borderRadius: 14, borderWidth: 1, borderColor: p.border, padding: 14,
   },
   rowAvatar: {
     width: 44, height: 44, borderRadius: 22,
-    backgroundColor: '#0F172A', borderWidth: 1, borderColor: '#334155',
+    backgroundColor: p.bg, borderWidth: 1, borderColor: p.border,
     alignItems: 'center', justifyContent: 'center',
   },
   avatar: { width: 44, height: 44, borderRadius: 22 },
@@ -161,18 +168,18 @@ const styles = StyleSheet.create({
     position: 'absolute', right: -4, bottom: -4,
     width: 20, height: 20, borderRadius: 10,
     alignItems: 'center', justifyContent: 'center',
-    borderWidth: 2, borderColor: '#1E293B',
+    borderWidth: 2, borderColor: p.surface,
   },
   rowInfo: { flex: 1, gap: 4 },
   rowTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  rowUsername: { color: '#F1F5F9', fontSize: 15, fontWeight: '700' },
+  rowUsername: { color: p.textPrimary, fontSize: 15, fontWeight: '700' },
   statusBadge: { borderRadius: 6, paddingHorizontal: 8, paddingVertical: 3 },
   statusText: { fontSize: 11, fontWeight: '700' },
   rowBottom: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  rowType: { color: '#94A3B8', fontSize: 12 },
-  rowDate: { color: '#475569', fontSize: 12 },
+  rowType: { color: p.textSecondary, fontSize: 12 },
+  rowDate: { color: p.textMuted, fontSize: 12 },
 
   empty: { alignItems: 'center', paddingTop: 60, paddingHorizontal: 32 },
-  emptyTitle: { fontSize: 18, fontWeight: '700', color: '#F1F5F9', textAlign: 'center', marginBottom: 8 },
-  emptyText: { fontSize: 14, color: '#64748B', textAlign: 'center', lineHeight: 20 },
-});
+  emptyTitle: { fontSize: 18, fontWeight: '700', color: p.textPrimary, textAlign: 'center', marginBottom: 8 },
+  emptyText: { fontSize: 14, color: p.textMuted, textAlign: 'center', lineHeight: 20 },
+}));

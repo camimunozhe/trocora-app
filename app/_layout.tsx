@@ -7,6 +7,7 @@ import * as Notifications from 'expo-notifications';
 import Constants from 'expo-constants';
 import Purchases from 'react-native-purchases';
 import { AuthProvider, useAuth } from '@/context/AuthContext';
+import { ThemeProvider, useTheme } from '@/context/ThemeContext';
 import { DialogProvider } from '@/lib/AppDialog';
 import { usePushTokenRegistration } from '@/lib/usePushTokenRegistration';
 import { useFonts } from 'expo-font';
@@ -87,8 +88,9 @@ function RootNavigator() {
     setPendingMeetupId(null);
   }, [pendingMeetupId, loading, session]);
 
+  const { palette } = useTheme();
   return (
-    <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: '#0F172A' } }}>
+    <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: palette.bg } }}>
       <Stack.Screen name="(auth)" />
       <Stack.Screen name="(onboarding)" />
       <Stack.Screen name="(tabs)" />
@@ -100,20 +102,29 @@ function RootNavigator() {
   );
 }
 
+function ThemedRoot() {
+  const { palette, theme } = useTheme();
+  return (
+    <View style={{ flex: 1, backgroundColor: palette.bg }}>
+      <DialogProvider>
+        <StatusBar style={theme === 'dark' ? 'light' : 'dark'} />
+        <RootNavigator />
+      </DialogProvider>
+    </View>
+  );
+}
+
 export default function RootLayout() {
   const [fontsLoaded] = useFonts({ ...Ionicons.font });
   if (!fontsLoaded) return null;
 
   return (
     <SafeAreaProvider>
-      <View style={{ flex: 1, backgroundColor: '#0F172A' }}>
-        <AuthProvider>
-          <DialogProvider>
-            <StatusBar style="light" />
-            <RootNavigator />
-          </DialogProvider>
-        </AuthProvider>
-      </View>
+      <AuthProvider>
+        <ThemeProvider>
+          <ThemedRoot />
+        </ThemeProvider>
+      </AuthProvider>
     </SafeAreaProvider>
   );
 }

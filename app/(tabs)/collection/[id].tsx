@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
 import {
-  View, Text, StyleSheet, TouchableOpacity,
+  View, Text, TouchableOpacity,
   ScrollView, ActivityIndicator, Modal, FlatList,
   TextInput, Switch, KeyboardAvoidingView, Platform,
 } from 'react-native';
@@ -8,10 +8,11 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useDialog } from '@/lib/AppDialog';
 import { Image } from 'expo-image';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { requestCollectionRefresh, patchCollectionCard, removeCollectionCard } from '@/lib/collectionRefresh';
+import { patchCollectionCard, removeCollectionCard } from '@/lib/collectionRefresh';
 import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/context/AuthContext';
+import { useTheme } from '@/context/ThemeContext';
 import { usePremium } from '@/lib/usePremium';
 import { assertCanPublish } from '@/lib/publishGate';
 import { uploadCardPhoto, deleteCardPhoto, MAX_CUSTOM_PHOTOS } from '@/lib/cardPhotos';
@@ -22,6 +23,7 @@ import { formatPrice, currencyLabel, convertCurrency } from '@/lib/currency';
 import { getUsdToClp } from '@/lib/exchangeRate';
 import { validateFolderGame, gameLabel } from '@/lib/folderValidation';
 import { marketPriceUsd, type CardWithCatalog } from '@/lib/cardPrice';
+import { makeStyles } from '@/lib/theme';
 
 type IoniconName = React.ComponentProps<typeof Ionicons>['name'];
 
@@ -69,10 +71,12 @@ const LANGUAGES: { value: CardLanguage; label: string }[] = [
 export default function CardDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const { user, profile, loading: authLoading } = useAuth();
+  const { palette } = useTheme();
   const { isPremium } = usePremium();
   const currency = profile?.currency ?? 'usd';
   const router = useRouter();
   const dialog = useDialog();
+  const styles = useStyles();
   type CardWithPrice = CardWithCatalog;
   const [card, setCard] = useState<CardWithPrice | null>(null);
   const [folders, setFolders] = useState<CollectionFolder[]>([]);
@@ -116,7 +120,6 @@ export default function CardDetailScreen() {
     return () => { mounted = false; };
   }, [currency]);
 
-  // Initialize price input — convert from the stored currency to the display currency
   useEffect(() => {
     if (!card) return;
     const val = card.price_reference;
@@ -222,7 +225,6 @@ export default function CardDetailScreen() {
     patchCollectionCard(id, { is_foil: value });
   }
 
-  // Optimistic +/- with debounced DB write so quick taps coalesce to one update.
   function changeQty(delta: number) {
     setCard(c => {
       if (!c) return c;
@@ -256,7 +258,7 @@ export default function CardDetailScreen() {
     setShowFolderPicker(false);
   }
 
-  if (loading || authLoading) return <ActivityIndicator style={{ flex: 1 }} color="#94A3B8" />;
+  if (loading || authLoading) return <ActivityIndicator style={{ flex: 1 }} color={palette.textSecondary} />;
   if (!card) return null;
 
   const gameIcon = GAME_ICON[card.game];
@@ -269,7 +271,7 @@ export default function CardDetailScreen() {
           <Text style={styles.back}>← Volver</Text>
         </TouchableOpacity>
         <TouchableOpacity onPress={handleDelete}>
-          <Ionicons name="trash-outline" size={20} color="#EF4444" />
+          <Ionicons name="trash-outline" size={20} color={palette.danger} />
         </TouchableOpacity>
       </View>
 
@@ -303,7 +305,7 @@ export default function CardDetailScreen() {
             <Text style={styles.detailLabel}>Condición</Text>
             <View style={styles.folderValue}>
               <Text style={styles.detailValue}>{CONDITION_LABELS[card.condition]}</Text>
-              <Ionicons name="chevron-forward-outline" size={14} color="#475569" />
+              <Ionicons name="chevron-forward-outline" size={14} color={palette.textMuted} />
             </View>
           </TouchableOpacity>
           <View style={styles.detailRow}>
@@ -315,11 +317,11 @@ export default function CardDetailScreen() {
                 disabled={card.quantity <= 1}
                 hitSlop={6}
               >
-                <Ionicons name="remove" size={18} color={card.quantity <= 1 ? '#475569' : '#F1F5F9'} />
+                <Ionicons name="remove" size={18} color={card.quantity <= 1 ? palette.textMuted : palette.textPrimary} />
               </TouchableOpacity>
               <Text style={styles.qtyValue}>{card.quantity}</Text>
               <TouchableOpacity style={styles.qtyBtn} onPress={() => changeQty(1)} hitSlop={6}>
-                <Ionicons name="add" size={18} color="#F1F5F9" />
+                <Ionicons name="add" size={18} color={palette.textPrimary} />
               </TouchableOpacity>
             </View>
           </View>
@@ -329,7 +331,7 @@ export default function CardDetailScreen() {
               <Text style={styles.detailValue}>
                 {LANGUAGES.find(l => l.value === card.language)?.label ?? '—'}
               </Text>
-              <Ionicons name="chevron-forward-outline" size={14} color="#475569" />
+              <Ionicons name="chevron-forward-outline" size={14} color={palette.textMuted} />
             </View>
           </TouchableOpacity>
           {(() => {
@@ -358,22 +360,22 @@ export default function CardDetailScreen() {
                             ? String(Math.round(marketPrice * (usdToClp ?? 950)))
                             : (marketPrice % 1 === 0 ? String(marketPrice) : marketPrice.toFixed(2)))
                         : (currency === 'clp' ? '0' : '0.00')}
-                      placeholderTextColor="#475569"
+                      placeholderTextColor={palette.textMuted}
                       returnKeyType="done"
                       onSubmitEditing={savePrice}
-                      selectionColor="#6366F1"
+                      selectionColor={palette.primary}
                       underlineColorAndroid="transparent"
                     />
                     <TouchableOpacity onPress={savePrice} disabled={priceSaving} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
                       {priceSaving
-                        ? <ActivityIndicator size="small" color="#94A3B8" />
-                        : <Ionicons name="checkmark-circle-outline" size={22} color="#6366F1" />}
+                        ? <ActivityIndicator size="small" color={palette.textSecondary} />
+                        : <Ionicons name="checkmark-circle-outline" size={22} color={palette.primary} />}
                     </TouchableOpacity>
                   </View>
                 </View>
                 {marketPrice != null && card.price_reference != null && (
                   <TouchableOpacity style={styles.useMarketRow} onPress={clearToMarketPrice}>
-                    <Ionicons name="trending-up-outline" size={13} color="#6366F1" />
+                    <Ionicons name="trending-up-outline" size={13} color={palette.primary} />
                     <Text style={styles.useMarketText}>Usar precio de mercado</Text>
                   </TouchableOpacity>
                 )}
@@ -389,9 +391,9 @@ export default function CardDetailScreen() {
                   <Text style={styles.detailValue}>{currentFolder.name}</Text>
                 </>
               ) : (
-                <Text style={[styles.detailValue, { color: '#475569' }]}>Sin carpeta</Text>
+                <Text style={[styles.detailValue, { color: palette.textMuted }]}>Sin carpeta</Text>
               )}
-              <Ionicons name="chevron-forward-outline" size={14} color="#475569" />
+              <Ionicons name="chevron-forward-outline" size={14} color={palette.textMuted} />
             </View>
           </TouchableOpacity>
         </View>
@@ -410,13 +412,13 @@ export default function CardDetailScreen() {
           </View>
           <View style={[styles.switchRow, card.is_published ? null : styles.switchRowLast]}>
             <View style={styles.switchLabelRow}>
-              <Ionicons name="pricetag-outline" size={16} color="#4ADE80" />
+              <Ionicons name="pricetag-outline" size={16} color={palette.successAlt} />
               <Text style={styles.switchLabel}>Publicar</Text>
             </View>
             <Switch
               value={card.is_published}
               onValueChange={v => toggleField('is_published', v)}
-              trackColor={{ true: '#6366F1' }}
+              trackColor={{ true: palette.primary }}
             />
           </View>
           {card.is_published && (
@@ -426,7 +428,7 @@ export default function CardDetailScreen() {
               activeOpacity={0.7}
             >
               <View style={[styles.switchLabelRow, { flex: 1, marginRight: 12 }]}>
-                <Ionicons name="rocket" size={16} color="#FACC15" />
+                <Ionicons name="rocket" size={16} color={palette.warning} />
                 <View style={{ flex: 1 }}>
                   <Text style={styles.switchLabel}>Boost en Explorar</Text>
                   <Text style={styles.switchHint} numberOfLines={2}>
@@ -440,11 +442,11 @@ export default function CardDetailScreen() {
                 <Switch
                   value={card.is_boosted}
                   onValueChange={() => toggleBoost()}
-                  trackColor={{ true: '#FACC15' }}
+                  trackColor={{ true: palette.warning }}
                 />
               ) : (
                 <View style={styles.proLock}>
-                  <Ionicons name="star" size={11} color="#FACC15" />
+                  <Ionicons name="star" size={11} color={palette.warning} />
                   <Text style={styles.proLockText}>Pro</Text>
                 </View>
               )}
@@ -482,7 +484,7 @@ export default function CardDetailScreen() {
                 >
                   <Text style={styles.folderOptionText}>{item.label}</Text>
                   {card.condition === item.value && (
-                    <Ionicons name="checkmark-outline" size={18} color="#6366F1" />
+                    <Ionicons name="checkmark-outline" size={18} color={palette.primary} />
                   )}
                 </TouchableOpacity>
               )}
@@ -506,7 +508,7 @@ export default function CardDetailScreen() {
                 >
                   <Text style={styles.folderOptionText}>{item.label}</Text>
                   {card.language === item.value && (
-                    <Ionicons name="checkmark-outline" size={18} color="#6366F1" />
+                    <Ionicons name="checkmark-outline" size={18} color={palette.primary} />
                   )}
                 </TouchableOpacity>
               )}
@@ -521,7 +523,7 @@ export default function CardDetailScreen() {
             <View style={styles.modalHandle} />
             <Text style={styles.modalTitle}>Mover a carpeta</Text>
             <FlatList
-              data={[{ id: null as string | null, name: 'Sin carpeta', color: '#475569' }, ...folders]}
+              data={[{ id: null as string | null, name: 'Sin carpeta', color: palette.textMuted }, ...folders]}
               keyExtractor={item => item.id ?? 'none'}
               renderItem={({ item }) => (
                 <TouchableOpacity
@@ -531,7 +533,7 @@ export default function CardDetailScreen() {
                   <View style={[styles.folderOptionDot, { backgroundColor: item.color }]} />
                   <Text style={styles.folderOptionText}>{item.name}</Text>
                   {card.folder_id === item.id && (
-                    <Ionicons name="checkmark-outline" size={18} color="#6366F1" />
+                    <Ionicons name="checkmark-outline" size={18} color={palette.primary} />
                   )}
                 </TouchableOpacity>
               )}
@@ -546,7 +548,7 @@ export default function CardDetailScreen() {
             <Image source={{ uri: card.image_url }} style={styles.zoomImage} contentFit="contain" />
           )}
           <TouchableOpacity style={styles.zoomClose} onPress={() => setImageZoom(false)} hitSlop={12}>
-            <Ionicons name="close" size={28} color="#F1F5F9" />
+            <Ionicons name="close" size={28} color={palette.textPrimary} />
           </TouchableOpacity>
         </TouchableOpacity>
       </Modal>
@@ -563,6 +565,8 @@ function CardPhotosSection({
 }) {
   const router = useRouter();
   const dialog = useDialog();
+  const { palette } = useTheme();
+  const styles = useStyles();
   const [uploading, setUploading] = useState(false);
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
   const photos = card.custom_photos ?? [];
@@ -571,7 +575,7 @@ function CardPhotosSection({
     if (!isPremium) {
       dialog.confirm({
         title: 'Fotos propias son Pro',
-        message: 'Con Trocora Pro podés subir hasta 5 fotos reales de tu carta para mostrar su estado.',
+        message: 'Con Trocora Pro puedes subir hasta 5 fotos reales de tu carta para mostrar su estado.',
         confirmText: 'Pasarme a Pro',
         cancelText: 'Más tarde',
         onConfirm: () => router.push('/paywall'),
@@ -579,7 +583,7 @@ function CardPhotosSection({
       return;
     }
     if (photos.length >= MAX_CUSTOM_PHOTOS) {
-      dialog.alert({ title: 'Máximo alcanzado', message: `Podés subir hasta ${MAX_CUSTOM_PHOTOS} fotos por carta.` });
+      dialog.alert({ title: 'Máximo alcanzado', message: `Puedes subir hasta ${MAX_CUSTOM_PHOTOS} fotos por carta.` });
       return;
     }
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -636,8 +640,6 @@ function CardPhotosSection({
     void deleteCardPhoto(url);
   }
 
-  // Hide entirely for free users with no photos (they don't even know it exists,
-  // unless they're publishing — show the CTA when published).
   if (!isPremium && photos.length === 0 && !card.is_published) return null;
 
   return (
@@ -648,7 +650,7 @@ function CardPhotosSection({
         </Text>
         {!isPremium && photos.length === 0 && (
           <View style={styles.proLock}>
-            <Ionicons name="star" size={11} color="#FACC15" />
+            <Ionicons name="star" size={11} color={palette.warning} />
             <Text style={styles.proLockText}>Pro</Text>
           </View>
         )}
@@ -656,9 +658,9 @@ function CardPhotosSection({
       <Text style={styles.photosHint}>
         {photos.length === 0
           ? isPremium
-            ? 'Mostrá el estado real de tu carta con fotos propias.'
-            : 'Función Pro · subí fotos reales para generar más confianza.'
-          : 'Toca una foto para ampliarla. Mantenelas actualizadas.'}
+            ? 'Muestra el estado real de tu carta con fotos propias.'
+            : 'Función Pro · sube fotos reales para generar más confianza.'
+          : 'Toca una foto para ampliarla. Mantenlas actualizadas.'}
       </Text>
 
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.photosScroll}>
@@ -688,10 +690,10 @@ function CardPhotosSection({
             activeOpacity={0.7}
           >
             {uploading ? (
-              <ActivityIndicator color="#94A3B8" />
+              <ActivityIndicator color={palette.textSecondary} />
             ) : (
               <>
-                <Ionicons name="camera-outline" size={28} color="#94A3B8" />
+                <Ionicons name="camera-outline" size={28} color={palette.textSecondary} />
                 <Text style={styles.photoAddText}>Agregar</Text>
               </>
             )}
@@ -710,6 +712,7 @@ function CardPhotosSection({
 }
 
 function DetailRow({ label, value, highlight }: { label: string; value: string; highlight?: boolean }) {
+  const styles = useStyles();
   return (
     <View style={styles.detailRow}>
       <Text style={styles.detailLabel}>{label}</Text>
@@ -718,26 +721,25 @@ function DetailRow({ label, value, highlight }: { label: string; value: string; 
   );
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#0F172A' },
+const useStyles = makeStyles((p) => ({
+  container: { flex: 1, backgroundColor: p.bg },
   header: {
     flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
-    padding: 16, borderBottomWidth: 1, borderBottomColor: '#1E293B',
+    padding: 16, borderBottomWidth: 1, borderBottomColor: p.surface,
   },
-  back: { color: '#6366F1', fontSize: 15 },
-  deleteBtn: { color: '#EF4444', fontSize: 15 },
+  back: { color: p.primary, fontSize: 15 },
   scroll: { flex: 1 },
   heroCard: {
     alignItems: 'center', padding: 32,
-    borderBottomWidth: 1, borderBottomColor: '#1E293B',
+    borderBottomWidth: 1, borderBottomColor: p.surface,
   },
   heroImage: { width: 180, height: 252, borderRadius: 10, marginBottom: 16 },
   heroIcon: { marginBottom: 12 },
   zoomOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.92)', alignItems: 'center', justifyContent: 'center' },
   zoomImage: { width: '92%', aspectRatio: 0.715, borderRadius: 12 },
   zoomClose: { position: 'absolute', top: 50, right: 20, padding: 8 },
-  heroName: { fontSize: 22, fontWeight: '800', color: '#F1F5F9', textAlign: 'center' },
-  heroGame: { fontSize: 14, color: '#64748B', marginTop: 4 },
+  heroName: { fontSize: 22, fontWeight: '800', color: p.textPrimary, textAlign: 'center' },
+  heroGame: { fontSize: 14, color: p.textMuted, marginTop: 4 },
   foilBadge: {
     flexDirection: 'row', alignItems: 'center', gap: 5,
     marginTop: 10, backgroundColor: '#1E3A5F',
@@ -745,74 +747,74 @@ const styles = StyleSheet.create({
   },
   foilText: { color: '#93C5FD', fontSize: 13, fontWeight: '600' },
   details: {
-    margin: 16, backgroundColor: '#1E293B',
-    borderRadius: 12, borderWidth: 1, borderColor: '#334155',
+    margin: 16, backgroundColor: p.surface,
+    borderRadius: 12, borderWidth: 1, borderColor: p.border,
   },
   detailRow: {
     flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
-    padding: 14, borderBottomWidth: 1, borderBottomColor: '#334155',
+    padding: 14, borderBottomWidth: 1, borderBottomColor: p.border,
   },
-  detailLabel: { color: '#64748B', fontSize: 14 },
-  detailValue: { color: '#F1F5F9', fontSize: 14, fontWeight: '600' },
-  detailValueHighlight: { color: '#4ADE80' },
-  priceBlock: { borderBottomWidth: 1, borderBottomColor: '#334155' },
+  detailLabel: { color: p.textMuted, fontSize: 14 },
+  detailValue: { color: p.textPrimary, fontSize: 14, fontWeight: '600' },
+  detailValueHighlight: { color: p.successAlt },
+  priceBlock: { borderBottomWidth: 1, borderBottomColor: p.border },
   marketRow: {
     flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
-    paddingHorizontal: 14, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: '#1E3A2F',
+    paddingHorizontal: 14, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: p.border,
   },
-  marketValue: { color: '#4ADE80', fontSize: 14, fontWeight: '600' },
+  marketValue: { color: p.successAlt, fontSize: 14, fontWeight: '600' },
   myPriceRow: {
     flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
     paddingHorizontal: 14, paddingVertical: 10,
   },
   myPriceInputRow: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-  currencySymbol: { color: '#94A3B8', fontSize: 14, fontWeight: '600' },
+  currencySymbol: { color: p.textSecondary, fontSize: 14, fontWeight: '600' },
   priceInput: {
-    color: '#F1F5F9', fontSize: 14, fontWeight: '600',
+    color: p.textPrimary, fontSize: 14, fontWeight: '600',
     width: 110, textAlign: 'right', paddingVertical: 4, paddingHorizontal: 8,
-    backgroundColor: '#0F172A', borderRadius: 8, borderWidth: 1, borderColor: '#334155',
+    backgroundColor: p.bg, borderRadius: 8, borderWidth: 1, borderColor: p.border,
   },
   useMarketRow: {
     flexDirection: 'row', alignItems: 'center', gap: 5,
     paddingHorizontal: 14, paddingVertical: 8,
   },
-  useMarketText: { color: '#6366F1', fontSize: 12, fontWeight: '600' },
+  useMarketText: { color: p.primary, fontSize: 12, fontWeight: '600' },
   folderValue: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   folderDot: { width: 8, height: 8, borderRadius: 4 },
   qtyStepper: { flexDirection: 'row', alignItems: 'center', gap: 14 },
   qtyBtn: {
     width: 32, height: 32, borderRadius: 8,
-    backgroundColor: '#0F172A', borderWidth: 1, borderColor: '#334155',
+    backgroundColor: p.bg, borderWidth: 1, borderColor: p.border,
     alignItems: 'center', justifyContent: 'center',
   },
   qtyBtnDisabled: { opacity: 0.4 },
-  qtyValue: { color: '#F1F5F9', fontSize: 16, fontWeight: '700', minWidth: 24, textAlign: 'center' },
+  qtyValue: { color: p.textPrimary, fontSize: 16, fontWeight: '700', minWidth: 24, textAlign: 'center' },
   switches: {
     marginHorizontal: 16, marginBottom: 16,
-    backgroundColor: '#1E293B', borderRadius: 12, borderWidth: 1, borderColor: '#334155',
+    backgroundColor: p.surface, borderRadius: 12, borderWidth: 1, borderColor: p.border,
   },
   switchRow: {
     flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
-    padding: 14, borderBottomWidth: 1, borderBottomColor: '#334155',
+    padding: 14, borderBottomWidth: 1, borderBottomColor: p.border,
   },
   switchRowLast: { borderBottomWidth: 0 },
   switchLabelRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  switchLabel: { color: '#F1F5F9', fontSize: 14 },
-  switchHint: { color: '#64748B', fontSize: 11, marginTop: 2 },
+  switchLabel: { color: p.textPrimary, fontSize: 14 },
+  switchHint: { color: p.textMuted, fontSize: 11, marginTop: 2 },
 
   photosSection: {
     marginHorizontal: 16, marginBottom: 16,
-    backgroundColor: '#1E293B', borderRadius: 12,
-    borderWidth: 1, borderColor: '#334155',
+    backgroundColor: p.surface, borderRadius: 12,
+    borderWidth: 1, borderColor: p.border,
     padding: 14,
   },
   photosHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  photosTitle: { color: '#F1F5F9', fontSize: 14, fontWeight: '700' },
-  photosHint: { color: '#64748B', fontSize: 12, marginTop: 4, lineHeight: 17 },
+  photosTitle: { color: p.textPrimary, fontSize: 14, fontWeight: '700' },
+  photosHint: { color: p.textMuted, fontSize: 12, marginTop: 4, lineHeight: 17 },
   photosScroll: { gap: 8, paddingTop: 12 },
   photoTile: {
     width: 100, height: 100, borderRadius: 10,
-    backgroundColor: '#0F172A', borderWidth: 1, borderColor: '#334155',
+    backgroundColor: p.bg, borderWidth: 1, borderColor: p.border,
     overflow: 'hidden', position: 'relative',
   },
   photoImg: { width: '100%', height: '100%' },
@@ -824,30 +826,30 @@ const styles = StyleSheet.create({
     alignItems: 'center', justifyContent: 'center',
     borderStyle: 'dashed',
   },
-  photoAddText: { color: '#94A3B8', fontSize: 11, marginTop: 4, fontWeight: '600' },
+  photoAddText: { color: p.textSecondary, fontSize: 11, marginTop: 4, fontWeight: '600' },
   proLock: {
     flexDirection: 'row', alignItems: 'center', gap: 3,
     backgroundColor: 'rgba(250,204,21,0.12)',
     borderWidth: 1, borderColor: 'rgba(250,204,21,0.5)',
     borderRadius: 10, paddingHorizontal: 8, paddingVertical: 3,
   },
-  proLockText: { color: '#FACC15', fontSize: 10, fontWeight: '800', letterSpacing: 0.3 },
-  notes: { margin: 16, backgroundColor: '#1E293B', borderRadius: 12, padding: 14 },
-  notesLabel: { color: '#64748B', fontSize: 12, fontWeight: '600', marginBottom: 6 },
-  notesText: { color: '#F1F5F9', fontSize: 14 },
+  proLockText: { color: p.warning, fontSize: 10, fontWeight: '800', letterSpacing: 0.3 },
+  notes: { margin: 16, backgroundColor: p.surface, borderRadius: 12, padding: 14 },
+  notesLabel: { color: p.textMuted, fontSize: 12, fontWeight: '600', marginBottom: 6 },
+  notesText: { color: p.textPrimary, fontSize: 14 },
 
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'flex-end' },
   modalSheet: {
-    backgroundColor: '#1E293B', borderTopLeftRadius: 20, borderTopRightRadius: 20,
+    backgroundColor: p.surface, borderTopLeftRadius: 20, borderTopRightRadius: 20,
     paddingBottom: 32, maxHeight: '60%',
   },
-  modalHandle: { width: 40, height: 4, borderRadius: 2, backgroundColor: '#334155', alignSelf: 'center', marginTop: 12, marginBottom: 4 },
-  modalTitle: { fontSize: 16, fontWeight: '700', color: '#F1F5F9', padding: 16, paddingBottom: 8 },
+  modalHandle: { width: 40, height: 4, borderRadius: 2, backgroundColor: p.surfaceAlt, alignSelf: 'center', marginTop: 12, marginBottom: 4 },
+  modalTitle: { fontSize: 16, fontWeight: '700', color: p.textPrimary, padding: 16, paddingBottom: 8 },
   folderOption: {
     flexDirection: 'row', alignItems: 'center', gap: 12,
-    padding: 16, borderBottomWidth: 1, borderBottomColor: '#334155',
+    padding: 16, borderBottomWidth: 1, borderBottomColor: p.border,
   },
-  folderOptionActive: { backgroundColor: '#0F172A' },
+  folderOptionActive: { backgroundColor: p.bg },
   folderOptionDot: { width: 12, height: 12, borderRadius: 6 },
-  folderOptionText: { flex: 1, color: '#F1F5F9', fontSize: 15 },
-});
+  folderOptionText: { flex: 1, color: p.textPrimary, fontSize: 15 },
+}));

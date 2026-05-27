@@ -1,20 +1,24 @@
 import { useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView } from 'react-native';
+import { View, Text, TouchableOpacity, ScrollView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/context/AuthContext';
+import { useTheme } from '@/context/ThemeContext';
 import { useDialog } from '@/lib/AppDialog';
 import { CHILE_REGIONS } from '@/lib/regions';
 import { usePremium } from '@/lib/usePremium';
-import { canAddRegion, limitReachedMessage, FREE_LIMITS } from '@/lib/planLimits';
+import { canAddRegion, limitReachedMessage } from '@/lib/planLimits';
+import { makeStyles } from '@/lib/theme';
 
 export default function RegionsScreen() {
   const { user, profile, refreshProfile } = useAuth();
+  const { palette } = useTheme();
   const router = useRouter();
   const dialog = useDialog();
   const { isPremium } = usePremium();
+  const styles = useStyles();
   const [selected, setSelected] = useState<Set<string>>(new Set(profile?.regions ?? []));
   const [saving, setSaving] = useState(false);
 
@@ -63,7 +67,7 @@ export default function RegionsScreen() {
     <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
       <View style={styles.header}>
         <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
-          <Ionicons name="chevron-back" size={20} color="#6366F1" />
+          <Ionicons name="chevron-back" size={20} color={palette.primary} />
           <Text style={styles.back}>Perfil</Text>
         </TouchableOpacity>
         <Text style={styles.title}>Regiones</Text>
@@ -86,7 +90,7 @@ export default function RegionsScreen() {
               activeOpacity={0.7}
             >
               <Text style={[styles.rowLabel, isOn && styles.rowLabelActive]}>{r.label}</Text>
-              {isOn && <Ionicons name="checkmark-circle" size={22} color="#6366F1" />}
+              {isOn && <Ionicons name="checkmark-circle" size={22} color={palette.primary} />}
             </TouchableOpacity>
           );
         })}
@@ -95,22 +99,22 @@ export default function RegionsScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#0F172A' },
+const useStyles = makeStyles((p) => ({
+  container: { flex: 1, backgroundColor: p.bg },
   header: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    padding: 16, borderBottomWidth: 1, borderBottomColor: '#1E293B',
+    padding: 16, borderBottomWidth: 1, borderBottomColor: p.surface,
   },
   backBtn: { flexDirection: 'row', alignItems: 'center', gap: 2, minWidth: 60 },
-  back: { color: '#6366F1', fontSize: 15 },
-  title: { color: '#F1F5F9', fontSize: 16, fontWeight: '700' },
+  back: { color: p.primary, fontSize: 15 },
+  title: { color: p.textPrimary, fontSize: 16, fontWeight: '700' },
   scroll: { padding: 20, gap: 8 },
-  intro: { color: '#94A3B8', fontSize: 13, lineHeight: 19, marginBottom: 12 },
+  intro: { color: p.textSecondary, fontSize: 13, lineHeight: 19, marginBottom: 12 },
   row: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    padding: 14, borderRadius: 12, borderWidth: 1, borderColor: '#334155', backgroundColor: '#1E293B',
+    padding: 14, borderRadius: 12, borderWidth: 1, borderColor: p.border, backgroundColor: p.surface,
   },
-  rowActive: { borderColor: '#6366F1', backgroundColor: '#6366F122' },
-  rowLabel: { color: '#F1F5F9', fontSize: 15, fontWeight: '600' },
-  rowLabelActive: { color: '#A5B4FC' },
-});
+  rowActive: { borderColor: p.primary, backgroundColor: p.primaryMuted },
+  rowLabel: { color: p.textPrimary, fontSize: 15, fontWeight: '600' },
+  rowLabelActive: { color: p.primary },
+}));

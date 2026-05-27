@@ -1,17 +1,19 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useState } from 'react';
 import {
-  View, Text, StyleSheet, TouchableOpacity, ScrollView, ActivityIndicator,
+  View, Text, TouchableOpacity, ScrollView, ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Image } from 'expo-image';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '@/context/AuthContext';
+import { useTheme } from '@/context/ThemeContext';
 import { usePremium } from '@/lib/usePremium';
 import { useDialog } from '@/lib/AppDialog';
 import { supabase } from '@/lib/supabase';
 import type { WatchlistEntry } from '@/lib/watchlist';
 import { removeFromWatchlist } from '@/lib/watchlist';
+import { makeStyles } from '@/lib/theme';
 import type { CardCondition } from '@/types/database';
 
 const CONDITION_LABELS: Record<CardCondition, string> = {
@@ -22,8 +24,10 @@ const CONDITION_LABELS: Record<CardCondition, string> = {
 export default function WatchlistScreen() {
   const router = useRouter();
   const { user } = useAuth();
+  const { palette } = useTheme();
   const { isPremium } = usePremium();
   const dialog = useDialog();
+  const styles = useStyles();
   const [entries, setEntries] = useState<WatchlistEntry[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -72,14 +76,14 @@ export default function WatchlistScreen() {
         <Header onBack={() => router.back()} />
         <View style={styles.proGate}>
           <View style={styles.proGateIcon}>
-            <Ionicons name="notifications" size={42} color="#FACC15" />
+            <Ionicons name="notifications" size={42} color={palette.warning} />
           </View>
           <Text style={styles.proGateTitle}>Watchlist con alertas</Text>
           <Text style={styles.proGateDesc}>
-            Marcá cartas que querés conseguir y te avisamos por push cuando alguien las publica.
+            Marca cartas que quieres conseguir y te avisamos por push cuando alguien las publica.
           </Text>
           <TouchableOpacity style={styles.proGateBtn} onPress={() => router.push('/paywall')}>
-            <Ionicons name="star" size={14} color="#0F172A" />
+            <Ionicons name="star" size={14} color={palette.bg} />
             <Text style={styles.proGateBtnText}>Probar Trocora Pro</Text>
           </TouchableOpacity>
         </View>
@@ -91,13 +95,13 @@ export default function WatchlistScreen() {
     <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
       <Header onBack={() => router.back()} onAdd={() => router.push('/(tabs)/profile/watchlist-add')} />
       {loading ? (
-        <ActivityIndicator style={{ flex: 1 }} color="#94A3B8" />
+        <ActivityIndicator style={{ flex: 1 }} color={palette.textSecondary} />
       ) : entries.length === 0 ? (
         <View style={styles.empty}>
-          <Ionicons name="heart-outline" size={48} color="#334155" />
+          <Ionicons name="heart-outline" size={48} color={palette.surfaceAlt} />
           <Text style={styles.emptyText}>Aún no agregaste cartas a tu watchlist.</Text>
           <Text style={styles.emptyHint}>
-            Buscá una carta en Explorar y tocá el corazón para empezar a recibir alertas.
+            Busca una carta en Explorar y toca el corazón para empezar a recibir alertas.
           </Text>
         </View>
       ) : (
@@ -108,14 +112,14 @@ export default function WatchlistScreen() {
                 <View style={styles.thumb}>
                   {e.image_url
                     ? <Image source={{ uri: e.image_url }} style={{ width: 50, height: 70, borderRadius: 6 }} contentFit="contain" />
-                    : <Ionicons name="card-outline" size={24} color="#64748B" />}
+                    : <Ionicons name="card-outline" size={24} color={palette.textMuted} />}
                 </View>
                 <View style={{ flex: 1 }}>
                   <Text style={styles.cardName} numberOfLines={1}>{e.card_name}</Text>
                   {e.set_name && <Text style={styles.cardSet} numberOfLines={1}>{e.set_name}</Text>}
                 </View>
                 <TouchableOpacity onPress={() => confirmRemove(e)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-                  <Ionicons name="trash-outline" size={18} color="#EF4444" />
+                  <Ionicons name="trash-outline" size={18} color={palette.danger} />
                 </TouchableOpacity>
               </View>
 
@@ -126,7 +130,7 @@ export default function WatchlistScreen() {
                   style={styles.toggleRow}
                   onPress={() => updateEntry(e.id, { foil_only: !e.foil_only })}
                 >
-                  <Ionicons name={e.foil_only ? 'checkbox' : 'square-outline'} size={20} color={e.foil_only ? '#6366F1' : '#64748B'} />
+                  <Ionicons name={e.foil_only ? 'checkbox' : 'square-outline'} size={20} color={e.foil_only ? palette.primary : palette.textMuted} />
                   <Text style={styles.toggleText}>Solo Foil / Holo</Text>
                 </TouchableOpacity>
 
@@ -134,7 +138,7 @@ export default function WatchlistScreen() {
                   style={styles.toggleRow}
                   onPress={() => updateEntry(e.id, { match_only_my_regions: !e.match_only_my_regions })}
                 >
-                  <Ionicons name={e.match_only_my_regions ? 'checkbox' : 'square-outline'} size={20} color={e.match_only_my_regions ? '#6366F1' : '#64748B'} />
+                  <Ionicons name={e.match_only_my_regions ? 'checkbox' : 'square-outline'} size={20} color={e.match_only_my_regions ? palette.primary : palette.textMuted} />
                   <Text style={styles.toggleText}>Solo en mis regiones</Text>
                 </TouchableOpacity>
 
@@ -167,15 +171,17 @@ export default function WatchlistScreen() {
 }
 
 function Header({ onBack, onAdd }: { onBack: () => void; onAdd?: () => void }) {
+  const styles = useStyles();
+  const { palette } = useTheme();
   return (
     <View style={styles.header}>
       <TouchableOpacity onPress={onBack} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
-        <Ionicons name="chevron-back" size={24} color="#6366F1" />
+        <Ionicons name="chevron-back" size={24} color={palette.primary} />
       </TouchableOpacity>
       <Text style={styles.headerTitle}>Watchlist</Text>
       {onAdd ? (
         <TouchableOpacity onPress={onAdd} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
-          <Ionicons name="add" size={26} color="#6366F1" />
+          <Ionicons name="add" size={26} color={palette.primary} />
         </TouchableOpacity>
       ) : (
         <View style={{ width: 24 }} />
@@ -184,51 +190,51 @@ function Header({ onBack, onAdd }: { onBack: () => void; onAdd?: () => void }) {
   );
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#0F172A' },
+const useStyles = makeStyles((p) => ({
+  container: { flex: 1, backgroundColor: p.bg },
   header: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
     paddingHorizontal: 12, paddingVertical: 12,
-    borderBottomWidth: 1, borderBottomColor: '#1E293B',
+    borderBottomWidth: 1, borderBottomColor: p.surface,
   },
-  headerTitle: { color: '#F1F5F9', fontSize: 17, fontWeight: '700' },
+  headerTitle: { color: p.textPrimary, fontSize: 17, fontWeight: '700' },
 
   scroll: { padding: 16, gap: 12 },
   empty: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 32, gap: 10 },
-  emptyText: { color: '#94A3B8', fontSize: 15, fontWeight: '600', marginTop: 8 },
-  emptyHint: { color: '#64748B', fontSize: 13, textAlign: 'center', lineHeight: 18 },
+  emptyText: { color: p.textSecondary, fontSize: 15, fontWeight: '600', marginTop: 8 },
+  emptyHint: { color: p.textMuted, fontSize: 13, textAlign: 'center', lineHeight: 18 },
 
   card: {
-    backgroundColor: '#1E293B', borderRadius: 12,
-    borderWidth: 1, borderColor: '#334155',
+    backgroundColor: p.surface, borderRadius: 12,
+    borderWidth: 1, borderColor: p.border,
     overflow: 'hidden',
   },
   cardHeader: {
     flexDirection: 'row', alignItems: 'center', gap: 12,
-    padding: 12, borderBottomWidth: 1, borderBottomColor: '#334155',
+    padding: 12, borderBottomWidth: 1, borderBottomColor: p.border,
   },
   thumb: {
     width: 50, height: 70, borderRadius: 6,
-    backgroundColor: '#0F172A', alignItems: 'center', justifyContent: 'center',
+    backgroundColor: p.bg, alignItems: 'center', justifyContent: 'center',
   },
-  cardName: { color: '#F1F5F9', fontSize: 14, fontWeight: '700' },
-  cardSet: { color: '#64748B', fontSize: 12, marginTop: 1 },
+  cardName: { color: p.textPrimary, fontSize: 14, fontWeight: '700' },
+  cardSet: { color: p.textMuted, fontSize: 12, marginTop: 1 },
 
   filterSection: { padding: 12, gap: 8 },
-  filterLabel: { color: '#64748B', fontSize: 11, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.5 },
+  filterLabel: { color: p.textMuted, fontSize: 11, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.5 },
   toggleRow: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 4 },
-  toggleText: { color: '#F1F5F9', fontSize: 14 },
-  subLabel: { color: '#94A3B8', fontSize: 12, marginTop: 8 },
+  toggleText: { color: p.textPrimary, fontSize: 14 },
+  subLabel: { color: p.textSecondary, fontSize: 12, marginTop: 8 },
   condChips: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
   condChip: {
     paddingHorizontal: 10, paddingVertical: 5,
-    borderRadius: 8, borderWidth: 1, borderColor: '#334155',
-    backgroundColor: '#0F172A',
+    borderRadius: 8, borderWidth: 1, borderColor: p.border,
+    backgroundColor: p.bg,
   },
-  condChipActive: { backgroundColor: '#6366F1', borderColor: '#6366F1' },
-  condChipText: { color: '#94A3B8', fontSize: 12, fontWeight: '600' },
+  condChipActive: { backgroundColor: p.primary, borderColor: p.primary },
+  condChipText: { color: p.textSecondary, fontSize: 12, fontWeight: '600' },
   condChipTextActive: { color: '#fff' },
-  allHint: { color: '#64748B', fontSize: 11, fontStyle: 'italic', marginTop: 4 },
+  allHint: { color: p.textMuted, fontSize: 11, fontStyle: 'italic', marginTop: 4 },
 
   proGate: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 32, gap: 12 },
   proGateIcon: {
@@ -236,13 +242,13 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(250,204,21,0.15)',
     alignItems: 'center', justifyContent: 'center',
   },
-  proGateTitle: { color: '#F1F5F9', fontSize: 22, fontWeight: '800' },
-  proGateDesc: { color: '#94A3B8', fontSize: 14, textAlign: 'center', lineHeight: 20, maxWidth: 320 },
+  proGateTitle: { color: p.textPrimary, fontSize: 22, fontWeight: '800' },
+  proGateDesc: { color: p.textSecondary, fontSize: 14, textAlign: 'center', lineHeight: 20, maxWidth: 320 },
   proGateBtn: {
     flexDirection: 'row', alignItems: 'center', gap: 6,
-    backgroundColor: '#FACC15', borderRadius: 12,
+    backgroundColor: p.warning, borderRadius: 12,
     paddingHorizontal: 16, paddingVertical: 12,
     marginTop: 12,
   },
-  proGateBtnText: { color: '#0F172A', fontSize: 14, fontWeight: '800' },
-});
+  proGateBtnText: { color: p.bg, fontSize: 14, fontWeight: '800' },
+}));

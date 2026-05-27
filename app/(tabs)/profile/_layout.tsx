@@ -5,9 +5,9 @@ export default function ProfileLayout() {
     <Stack screenOptions={{ headerShown: false }}>
       <Stack.Screen name="index" />
       <Stack.Screen name="settings" />
-      <Stack.Screen name="verify" options={{ presentation: 'modal' }} />
       <Stack.Screen name="games" />
       <Stack.Screen name="currency" />
+      <Stack.Screen name="theme" />
       <Stack.Screen name="regions" />
       <Stack.Screen name="privacy" />
       <Stack.Screen name="stats" />

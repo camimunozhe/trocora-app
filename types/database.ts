@@ -87,6 +87,7 @@ export interface Profile {
   premium_until: string | null;
   premium_product_id: string | null;
   premium_platform: string | null;
+  theme_preference: 'light' | 'dark' | 'system';
   created_at: string;
   updated_at: string;
 }
@@ -156,8 +157,6 @@ export interface CollectionFolder {
   user_id: string;
   name: string;
   color: string;
-  is_default: boolean;
-  game: TCGGame | null;
   created_at: string;
 }
 

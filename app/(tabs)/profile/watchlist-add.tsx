@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import {
-  View, Text, TextInput, TouchableOpacity, StyleSheet,
+  View, Text, TextInput, TouchableOpacity,
   ScrollView, FlatList, ActivityIndicator, Dimensions,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -9,10 +9,12 @@ import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/context/AuthContext';
+import { useTheme } from '@/context/ThemeContext';
 import { usePremium } from '@/lib/usePremium';
 import { useDialog } from '@/lib/AppDialog';
 import { addToWatchlist, isInWatchlist } from '@/lib/watchlist';
 import { resolveEnabledGames } from '@/lib/enabledGames';
+import { makeStyles } from '@/lib/theme';
 import type { TCGGame } from '@/types/database';
 
 type IoniconName = React.ComponentProps<typeof Ionicons>['name'];
@@ -57,8 +59,10 @@ function getTitle(p: Page): string {
 export default function WatchlistAddScreen() {
   const router = useRouter();
   const { user, profile } = useAuth();
+  const { palette } = useTheme();
   const { isPremium } = usePremium();
   const dialog = useDialog();
+  const styles = useStyles();
   const enabledGames = resolveEnabledGames(profile?.enabled_games);
   const initial: Page = enabledGames.length === 1
     ? { page: 'method', game: enabledGames[0] }
@@ -66,7 +70,6 @@ export default function WatchlistAddScreen() {
   const [stack, setStack] = useState<Page[]>([initial]);
   const [added, setAdded] = useState<Set<string>>(new Set());
 
-  // Block free users entirely.
   useEffect(() => {
     if (!isPremium) {
       dialog.confirm({
@@ -115,7 +118,7 @@ export default function WatchlistAddScreen() {
     <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
       <View style={styles.header}>
         <TouchableOpacity onPress={pop} style={styles.backBtn}>
-          <Ionicons name="chevron-back" size={20} color="#6366F1" />
+          <Ionicons name="chevron-back" size={20} color={palette.primary} />
           <Text style={styles.back}>{stack.length <= 1 ? 'Cerrar' : 'Volver'}</Text>
         </TouchableOpacity>
         <Text style={styles.title} numberOfLines={1}>{getTitle(current)}</Text>
@@ -156,9 +159,9 @@ export default function WatchlistAddScreen() {
   );
 }
 
-// ─── Game step ───────────────────────────────────────────────────────────────
-
 function GameStep({ enabledGames, onSelect }: { enabledGames: TCGGame[]; onSelect: (g: TCGGame) => void }) {
+  const styles = useStyles();
+  const { palette } = useTheme();
   const visible = GAMES.filter(g => enabledGames.includes(g.value));
   return (
     <ScrollView contentContainerStyle={styles.scrollPad}>
@@ -171,50 +174,51 @@ function GameStep({ enabledGames, onSelect }: { enabledGames: TCGGame[]; onSelec
               : <Ionicons name={g.icon} size={30} color={g.color} />}
           </View>
           <Text style={styles.bigCardLabel}>{g.label}</Text>
-          <Ionicons name="chevron-forward" size={18} color="#475569" />
+          <Ionicons name="chevron-forward" size={18} color={palette.textMuted} />
         </TouchableOpacity>
       ))}
     </ScrollView>
   );
 }
 
-// ─── Method step ─────────────────────────────────────────────────────────────
-
 function MethodStep({ game, onSet, onName }: { game: TCGGame; onSet: () => void; onName: () => void }) {
+  const styles = useStyles();
   const hasNameSearch = game === 'pokemon';
   return (
     <ScrollView contentContainerStyle={styles.scrollPad}>
-      <Text style={styles.hint}>¿Cómo querés buscar?</Text>
-      <MethodOption icon="albums-outline" label="Por set" desc="Explorá las expansiones" onPress={onSet} />
+      <Text style={styles.hint}>¿Cómo quieres buscar?</Text>
+      <MethodOption icon="albums-outline" label="Por set" desc="Explora las expansiones" onPress={onSet} />
       {hasNameSearch && (
-        <MethodOption icon="search-outline" label="Por nombre" desc="Buscá por nombre de la carta" onPress={onName} />
+        <MethodOption icon="search-outline" label="Por nombre" desc="Busca por nombre de la carta" onPress={onName} />
       )}
     </ScrollView>
   );
 }
 
 function MethodOption({ icon, label, desc, onPress }: { icon: IoniconName; label: string; desc: string; onPress: () => void }) {
+  const styles = useStyles();
+  const { palette } = useTheme();
   return (
     <TouchableOpacity style={styles.methodCard} onPress={onPress}>
       <View style={styles.methodIconBox}>
-        <Ionicons name={icon} size={24} color="#A5B4FC" />
+        <Ionicons name={icon} size={24} color={palette.primary} />
       </View>
       <View style={{ flex: 1 }}>
         <Text style={styles.methodLabel}>{label}</Text>
         <Text style={styles.methodDesc}>{desc}</Text>
       </View>
-      <Ionicons name="chevron-forward" size={18} color="#475569" />
+      <Ionicons name="chevron-forward" size={18} color={palette.textMuted} />
     </TouchableOpacity>
   );
 }
-
-// ─── Sets step ───────────────────────────────────────────────────────────────
 
 function SetsStep({ game, onSelect }: { game: TCGGame; onSelect: (id: string, name: string) => void }) {
   return game === 'magic' ? <MagicSetsStep onSelect={onSelect} /> : <PokemonSetsStep onSelect={onSelect} />;
 }
 
 function PokemonSetsStep({ onSelect }: { onSelect: (id: string, name: string) => void }) {
+  const styles = useStyles();
+  const { palette } = useTheme();
   const [sets, setSets] = useState<PkmSet[]>([]);
   const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(true);
@@ -231,7 +235,7 @@ function PokemonSetsStep({ onSelect }: { onSelect: (id: string, name: string) =>
     ? sets.filter(s => s.name.toLowerCase().includes(search.toLowerCase()) || s.series.toLowerCase().includes(search.toLowerCase()))
     : sets;
 
-  if (loading) return <ActivityIndicator style={{ flex: 1, marginTop: 40 }} color="#94A3B8" />;
+  if (loading) return <ActivityIndicator style={{ flex: 1, marginTop: 40 }} color={palette.textSecondary} />;
   return (
     <View style={{ flex: 1 }}>
       <TextInput
@@ -239,7 +243,7 @@ function PokemonSetsStep({ onSelect }: { onSelect: (id: string, name: string) =>
         value={search}
         onChangeText={setSearch}
         placeholder="Buscar set o serie..."
-        placeholderTextColor="#475569"
+        placeholderTextColor={palette.textMuted}
       />
       <FlatList
         data={filtered}
@@ -251,7 +255,7 @@ function PokemonSetsStep({ onSelect }: { onSelect: (id: string, name: string) =>
               <Text style={styles.setName}>{item.name}</Text>
               <Text style={styles.setMeta}>{item.series} · {item.total} cartas</Text>
             </View>
-            <Ionicons name="chevron-forward" size={16} color="#475569" />
+            <Ionicons name="chevron-forward" size={16} color={palette.textMuted} />
           </TouchableOpacity>
         )}
         contentContainerStyle={{ paddingBottom: 20 }}
@@ -261,6 +265,8 @@ function PokemonSetsStep({ onSelect }: { onSelect: (id: string, name: string) =>
 }
 
 function MagicSetsStep({ onSelect }: { onSelect: (id: string, name: string) => void }) {
+  const styles = useStyles();
+  const { palette } = useTheme();
   const [sets, setSets] = useState<MtgSet[]>([]);
   const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(true);
@@ -280,7 +286,7 @@ function MagicSetsStep({ onSelect }: { onSelect: (id: string, name: string) => v
     ? sets.filter(s => s.name.toLowerCase().includes(search.toLowerCase()) || s.id.toLowerCase().includes(search.toLowerCase()))
     : sets;
 
-  if (loading) return <ActivityIndicator style={{ flex: 1, marginTop: 40 }} color="#94A3B8" />;
+  if (loading) return <ActivityIndicator style={{ flex: 1, marginTop: 40 }} color={palette.textSecondary} />;
   return (
     <View style={{ flex: 1 }}>
       <TextInput
@@ -288,7 +294,7 @@ function MagicSetsStep({ onSelect }: { onSelect: (id: string, name: string) => v
         value={search}
         onChangeText={setSearch}
         placeholder="Buscar set..."
-        placeholderTextColor="#475569"
+        placeholderTextColor={palette.textMuted}
       />
       <FlatList
         data={filtered}
@@ -302,7 +308,7 @@ function MagicSetsStep({ onSelect }: { onSelect: (id: string, name: string) => v
               <Text style={styles.setName}>{item.name}</Text>
               <Text style={styles.setMeta}>{item.card_count} cartas · {item.released_at?.slice(0, 4)}</Text>
             </View>
-            <Ionicons name="chevron-forward" size={16} color="#475569" />
+            <Ionicons name="chevron-forward" size={16} color={palette.textMuted} />
           </TouchableOpacity>
         )}
         contentContainerStyle={{ paddingBottom: 20 }}
@@ -310,8 +316,6 @@ function MagicSetsStep({ onSelect }: { onSelect: (id: string, name: string) => v
     </View>
   );
 }
-
-// ─── Cards in set step ───────────────────────────────────────────────────────
 
 function CardsInSetStep({
   setId, game, added, onAdd,
@@ -321,6 +325,8 @@ function CardsInSetStep({
   added: Set<string>;
   onAdd: (card: CatalogCard) => void;
 }) {
+  const styles = useStyles();
+  const { palette } = useTheme();
   const [cards, setCards] = useState<CatalogCard[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -355,7 +361,7 @@ function CardsInSetStep({
     }
   }, [setId, game]);
 
-  if (loading) return <ActivityIndicator style={{ flex: 1, marginTop: 40 }} color="#94A3B8" />;
+  if (loading) return <ActivityIndicator style={{ flex: 1, marginTop: 40 }} color={palette.textSecondary} />;
 
   return (
     <FlatList
@@ -377,7 +383,7 @@ function CardsInSetStep({
               <Text style={styles.thumbName} numberOfLines={1}>{item.name}</Text>
             </View>
             <View style={[styles.heart, on && styles.heartActive]}>
-              <Ionicons name={on ? 'heart' : 'heart-outline'} size={14} color={on ? '#0F172A' : '#fff'} />
+              <Ionicons name={on ? 'heart' : 'heart-outline'} size={14} color={on ? palette.bg : '#fff'} />
             </View>
           </TouchableOpacity>
         );
@@ -387,9 +393,9 @@ function CardsInSetStep({
   );
 }
 
-// ─── Search by name step ─────────────────────────────────────────────────────
-
 function SearchNameStep({ added, onAdd }: { added: Set<string>; onAdd: (card: CatalogCard) => void }) {
+  const styles = useStyles();
+  const { palette } = useTheme();
   const [query, setQuery] = useState('');
   const [cards, setCards] = useState<CatalogCard[]>([]);
   const [loading, setLoading] = useState(false);
@@ -417,10 +423,10 @@ function SearchNameStep({ added, onAdd }: { added: Set<string>; onAdd: (card: Ca
         value={query}
         onChangeText={setQuery}
         placeholder="Ej: Charizard, Pikachu..."
-        placeholderTextColor="#475569"
+        placeholderTextColor={palette.textMuted}
         autoFocus
       />
-      {loading && <ActivityIndicator style={{ marginTop: 24 }} color="#94A3B8" />}
+      {loading && <ActivityIndicator style={{ marginTop: 24 }} color={palette.textSecondary} />}
       {!loading && (
         <FlatList
           data={cards}
@@ -442,7 +448,7 @@ function SearchNameStep({ added, onAdd }: { added: Set<string>; onAdd: (card: Ca
                 </View>
                 <Text style={styles.thumbSet} numberOfLines={1}>{item.set_name}</Text>
                 <View style={[styles.heart, on && styles.heartActive]}>
-                  <Ionicons name={on ? 'heart' : 'heart-outline'} size={14} color={on ? '#0F172A' : '#fff'} />
+                  <Ionicons name={on ? 'heart' : 'heart-outline'} size={14} color={on ? palette.bg : '#fff'} />
                 </View>
               </TouchableOpacity>
             );
@@ -454,8 +460,8 @@ function SearchNameStep({ added, onAdd }: { added: Set<string>; onAdd: (card: Ca
               </View>
             ) : (
               <View style={styles.empty}>
-                <Ionicons name="search-outline" size={40} color="#334155" />
-                <Text style={styles.emptyText}>Buscá una carta para agregarla</Text>
+                <Ionicons name="search-outline" size={40} color={palette.surfaceAlt} />
+                <Text style={styles.emptyText}>Busca una carta para agregarla</Text>
               </View>
             )
           }
@@ -466,77 +472,77 @@ function SearchNameStep({ added, onAdd }: { added: Set<string>; onAdd: (card: Ca
   );
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#0F172A' },
+const useStyles = makeStyles((p) => ({
+  container: { flex: 1, backgroundColor: p.bg },
   header: {
     flexDirection: 'row', alignItems: 'center',
     paddingHorizontal: 12, paddingVertical: 12,
-    borderBottomWidth: 1, borderBottomColor: '#1E293B',
+    borderBottomWidth: 1, borderBottomColor: p.surface,
   },
   backBtn: { flexDirection: 'row', alignItems: 'center', gap: 2, width: 70 },
-  back: { color: '#6366F1', fontSize: 15 },
-  title: { flex: 1, color: '#F1F5F9', fontSize: 17, fontWeight: '700', textAlign: 'center' },
+  back: { color: p.primary, fontSize: 15 },
+  title: { flex: 1, color: p.textPrimary, fontSize: 17, fontWeight: '700', textAlign: 'center' },
 
   scrollPad: { padding: 16 },
-  hint: { color: '#94A3B8', fontSize: 14, marginBottom: 16 },
+  hint: { color: p.textSecondary, fontSize: 14, marginBottom: 16 },
 
   bigCard: {
     flexDirection: 'row', alignItems: 'center', gap: 14,
-    backgroundColor: '#1E293B', borderRadius: 12, padding: 16,
-    marginBottom: 10, borderWidth: 1, borderColor: '#334155',
+    backgroundColor: p.surface, borderRadius: 12, padding: 16,
+    marginBottom: 10, borderWidth: 1, borderColor: p.border,
   },
   bigCardIcon: { width: 52, height: 52, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
-  bigCardLabel: { flex: 1, color: '#F1F5F9', fontSize: 16, fontWeight: '700' },
+  bigCardLabel: { flex: 1, color: p.textPrimary, fontSize: 16, fontWeight: '700' },
 
   methodCard: {
     flexDirection: 'row', alignItems: 'center', gap: 14,
-    backgroundColor: '#1E293B', borderRadius: 12, padding: 16,
-    marginBottom: 10, borderWidth: 1, borderColor: '#334155',
+    backgroundColor: p.surface, borderRadius: 12, padding: 16,
+    marginBottom: 10, borderWidth: 1, borderColor: p.border,
   },
-  methodIconBox: { width: 48, height: 48, borderRadius: 12, backgroundColor: '#1E1E4A', alignItems: 'center', justifyContent: 'center' },
-  methodLabel: { color: '#F1F5F9', fontSize: 15, fontWeight: '700' },
-  methodDesc: { color: '#64748B', fontSize: 13, marginTop: 2 },
+  methodIconBox: { width: 48, height: 48, borderRadius: 12, backgroundColor: p.primaryMuted, alignItems: 'center', justifyContent: 'center' },
+  methodLabel: { color: p.textPrimary, fontSize: 15, fontWeight: '700' },
+  methodDesc: { color: p.textMuted, fontSize: 13, marginTop: 2 },
 
   searchBar: {
     margin: 12, marginBottom: 8,
-    backgroundColor: '#1E293B', borderWidth: 1, borderColor: '#334155',
-    borderRadius: 12, padding: 12, fontSize: 14, color: '#F1F5F9',
+    backgroundColor: p.surface, borderWidth: 1, borderColor: p.border,
+    borderRadius: 12, padding: 12, fontSize: 14, color: p.textPrimary,
   },
 
   setRow: {
     flexDirection: 'row', alignItems: 'center', gap: 12,
     paddingHorizontal: 16, paddingVertical: 12,
-    borderBottomWidth: 1, borderBottomColor: '#1E293B',
+    borderBottomWidth: 1, borderBottomColor: p.surface,
   },
   setSymbol: { width: 36, height: 36 },
   mtgSetCode: {
     width: 44, height: 36, borderRadius: 8,
-    backgroundColor: '#1E1E4A', alignItems: 'center', justifyContent: 'center',
+    backgroundColor: p.primaryMuted, alignItems: 'center', justifyContent: 'center',
   },
   mtgSetCodeText: { color: '#A78BFA', fontSize: 11, fontWeight: '800' },
-  setName: { color: '#F1F5F9', fontSize: 14, fontWeight: '600' },
-  setMeta: { color: '#64748B', fontSize: 12, marginTop: 1 },
+  setName: { color: p.textPrimary, fontSize: 14, fontWeight: '600' },
+  setMeta: { color: p.textMuted, fontSize: 12, marginTop: 1 },
 
   thumb: {
     width: CARD_WIDTH, margin: 4, alignItems: 'center',
-    backgroundColor: '#1E293B', borderRadius: 10, padding: 8,
-    borderWidth: 1, borderColor: '#334155',
+    backgroundColor: p.surface, borderRadius: 10, padding: 8,
+    borderWidth: 1, borderColor: p.border,
     position: 'relative',
   },
-  thumbAdded: { borderColor: '#FACC15', backgroundColor: 'rgba(250,204,21,0.08)' },
+  thumbAdded: { borderColor: p.warning, backgroundColor: 'rgba(250,204,21,0.08)' },
   thumbImg: { width: '100%', aspectRatio: 0.715, borderRadius: 6 },
   thumbFooter: { flexDirection: 'row', alignItems: 'center', marginTop: 4, gap: 3 },
-  thumbNum: { color: '#64748B', fontSize: 9, fontWeight: '600' },
-  thumbName: { color: '#F1F5F9', fontSize: 9, fontWeight: '600', flex: 1 },
-  thumbSet: { color: '#64748B', fontSize: 9, marginTop: 2 },
+  thumbNum: { color: p.textMuted, fontSize: 9, fontWeight: '600' },
+  thumbName: { color: p.textPrimary, fontSize: 9, fontWeight: '600', flex: 1 },
+  thumbSet: { color: p.textMuted, fontSize: 9, marginTop: 2 },
 
   heart: {
     position: 'absolute', top: 6, right: 6,
     backgroundColor: 'rgba(0,0,0,0.55)', borderRadius: 12,
     width: 24, height: 24, alignItems: 'center', justifyContent: 'center',
   },
-  heartActive: { backgroundColor: '#FACC15' },
+  heartActive: { backgroundColor: p.warning },
 
   empty: { alignItems: 'center', paddingTop: 60, gap: 10 },
-  emptyText: { color: '#64748B', fontSize: 14 },
-});
+  emptyText: { color: p.textMuted, fontSize: 14 },
+}));

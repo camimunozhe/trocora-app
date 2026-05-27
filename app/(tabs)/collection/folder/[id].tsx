@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback, useRef, useMemo } from 'react';
 import {
-  View, Text, FlatList, TouchableOpacity, StyleSheet,
+  View, Text, FlatList, TouchableOpacity,
   ActivityIndicator, RefreshControl,
   Dimensions, Modal, TextInput, AppState,
 } from 'react-native';
@@ -11,6 +11,7 @@ import { useLocalSearchParams, useRouter, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/context/AuthContext';
+import { useTheme } from '@/context/ThemeContext';
 import { usePremium } from '@/lib/usePremium';
 import { assertCanPublish } from '@/lib/publishGate';
 import type { CardCollection, CollectionFolder, TCGGame } from '@/types/database';
@@ -19,10 +20,10 @@ import { getUsdToClp } from '@/lib/exchangeRate';
 import { availabilityBorder } from '@/lib/cardStyle';
 import { patchCollectionCard, removeCollectionCard, requestCollectionRefresh, subscribeCollection } from '@/lib/collectionRefresh';
 import { validateFolderGame, gameLabel } from '@/lib/folderValidation';
-import { reassignFolderCardsToDefault } from '@/lib/defaultFolders';
 import { effectivePrice, COLLECTION_CARD_SELECT, type CardWithCatalog } from '@/lib/cardPrice';
 import { FolderIcon } from '@/lib/folderIcon';
 import { UndoSnackbar } from '@/lib/UndoSnackbar';
+import { makeStyles } from '@/lib/theme';
 
 type IoniconName = React.ComponentProps<typeof Ionicons>['name'];
 
@@ -43,10 +44,12 @@ const GAME_ICON: Record<TCGGame, { name: IoniconName; color: string }> = {
 export default function FolderDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const { user, profile, loading: authLoading } = useAuth();
+  const { palette } = useTheme();
   const { isPremium } = usePremium();
   const currency = profile?.currency ?? 'usd';
   const router = useRouter();
   const dialog = useDialog();
+  const styles = useStyles();
 
   const [folder, setFolder] = useState<CollectionFolder | null>(null);
   const [cards, setCards] = useState<CardCollectionWithPrice[]>([]);
@@ -149,12 +152,6 @@ export default function FolderDetailScreen() {
     setRefreshing(true);
     await Promise.all([fetchFolder(), fetchCards()]);
     setRefreshing(false);
-  }
-
-  async function removeFromFolder(cardId: string) {
-    await supabase.from('cards_collection').update({ folder_id: null }).eq('id', cardId);
-    setCards(prev => prev.filter(c => c.id !== cardId));
-    patchCollectionCard(cardId, { folder_id: null });
   }
 
   function handleCardPress(card: CardCollection) {
@@ -295,21 +292,16 @@ export default function FolderDetailScreen() {
   }
 
   async function deleteFolder() {
-    if (folder?.is_default) {
-      dialog.alert({ title: 'Carpeta default', message: 'No se puede eliminar la carpeta default de un juego. Podés renombrarla.' });
-      return;
-    }
-    const folderGame = (cards[0]?.game ?? null) as TCGGame | null;
-    const destinationLabel = folderGame && folderGame !== 'other'
-      ? `Las cartas se moverán a tu carpeta default de ${gameLabel(folderGame)}.`
-      : 'Las cartas quedarán sin carpeta.';
     dialog.confirm({
       title: 'Eliminar carpeta',
-      message: `¿Eliminar "${folder?.name}"? ${destinationLabel}`,
+      message: `¿Eliminar "${folder?.name}"? Las cartas que tenía adentro quedarán sin carpeta.`,
       confirmText: 'Eliminar',
       destructive: true,
       onConfirm: async () => {
-        if (user) await reassignFolderCardsToDefault(user.id, id);
+        if (user) {
+          await supabase.from('cards_collection').update({ folder_id: null })
+            .eq('user_id', user.id).eq('folder_id', id);
+        }
         await supabase.from('collection_folders').delete().eq('id', id);
         requestCollectionRefresh();
         router.back();
@@ -347,7 +339,7 @@ export default function FolderDetailScreen() {
     return arr;
   }, [visibleCards, sortBy, sortDir, currency, usdToClp]);
 
-  if (loading || authLoading || !rateReady) return <ActivityIndicator style={{ flex: 1, backgroundColor: '#0F172A' }} color="#94A3B8" />;
+  if (loading || authLoading || !rateReady) return <ActivityIndicator style={{ flex: 1, backgroundColor: palette.bg }} color={palette.textSecondary} />;
   if (!folder) return null;
 
   return (
@@ -359,7 +351,7 @@ export default function FolderDetailScreen() {
           </TouchableOpacity>
         ) : (
           <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
-            <Ionicons name="chevron-back" size={20} color="#6366F1" />
+            <Ionicons name="chevron-back" size={20} color={palette.primary} />
             <Text style={styles.back}>Colección</Text>
           </TouchableOpacity>
         )}
@@ -383,13 +375,11 @@ export default function FolderDetailScreen() {
           ) : (
             <>
               <TouchableOpacity onPress={() => setShowAddSheet(true)} style={styles.headerIconBtn} hitSlop={8}>
-                <Ionicons name="add" size={24} color="#6366F1" />
+                <Ionicons name="add" size={24} color={palette.primary} />
               </TouchableOpacity>
-              {!folder.is_default && (
-                <TouchableOpacity onPress={deleteFolder} style={styles.headerIconBtn} hitSlop={8}>
-                  <Ionicons name="trash-outline" size={20} color="#EF4444" />
-                </TouchableOpacity>
-              )}
+              <TouchableOpacity onPress={deleteFolder} style={styles.headerIconBtn} hitSlop={8}>
+                <Ionicons name="trash-outline" size={20} color={palette.danger} />
+              </TouchableOpacity>
             </>
           )}
         </View>
@@ -445,10 +435,10 @@ export default function FolderDetailScreen() {
             usdToClp={usdToClp}
           />
         )}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#6366F1" />}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={palette.primary} />}
         ListEmptyComponent={
           <View style={styles.emptyBox}>
-            <Ionicons name="folder-open-outline" size={48} color="#334155" />
+            <Ionicons name="folder-open-outline" size={48} color={palette.surfaceAlt} />
             <Text style={styles.emptyTitle}>Carpeta vacía</Text>
             <Text style={styles.emptyText}>Toca + para agregar cartas</Text>
           </View>
@@ -463,7 +453,7 @@ export default function FolderDetailScreen() {
             onPress={() => setBulkFolderOpen(true)}
             disabled={selectedCards.size === 0}
           >
-            <Ionicons name="folder-outline" size={20} color={selectedCards.size > 0 ? '#F1F5F9' : '#475569'} />
+            <Ionicons name="folder-outline" size={20} color={selectedCards.size > 0 ? palette.textPrimary : palette.textMuted} />
             <Text style={[styles.selActionText, selectedCards.size === 0 && styles.selActionTextDisabled]}>Mover</Text>
           </TouchableOpacity>
           <TouchableOpacity
@@ -471,7 +461,7 @@ export default function FolderDetailScreen() {
             onPress={bulkRemoveFromFolder}
             disabled={selectedCards.size === 0}
           >
-            <Ionicons name="folder-open-outline" size={20} color={selectedCards.size > 0 ? '#94A3B8' : '#475569'} />
+            <Ionicons name="folder-open-outline" size={20} color={selectedCards.size > 0 ? palette.textSecondary : palette.textMuted} />
             <Text style={[styles.selActionText, selectedCards.size === 0 && styles.selActionTextDisabled]}>Quitar</Text>
           </TouchableOpacity>
           <TouchableOpacity
@@ -479,7 +469,7 @@ export default function FolderDetailScreen() {
             onPress={() => bulkToggleField('is_foil')}
             disabled={selectedCards.size === 0}
           >
-            <Ionicons name="star-outline" size={20} color={selectedCards.size > 0 ? '#93C5FD' : '#475569'} />
+            <Ionicons name="star-outline" size={20} color={selectedCards.size > 0 ? '#93C5FD' : palette.textMuted} />
             <Text style={[styles.selActionText, selectedCards.size === 0 && styles.selActionTextDisabled]}>Foil</Text>
           </TouchableOpacity>
           <TouchableOpacity
@@ -487,7 +477,7 @@ export default function FolderDetailScreen() {
             onPress={() => bulkToggleField('is_published')}
             disabled={selectedCards.size === 0}
           >
-            <Ionicons name="pricetag-outline" size={20} color={selectedCards.size > 0 ? '#4ADE80' : '#475569'} />
+            <Ionicons name="pricetag-outline" size={20} color={selectedCards.size > 0 ? palette.successAlt : palette.textMuted} />
             <Text style={[styles.selActionText, selectedCards.size === 0 && styles.selActionTextDisabled]}>Publicar</Text>
           </TouchableOpacity>
           <TouchableOpacity
@@ -495,8 +485,8 @@ export default function FolderDetailScreen() {
             onPress={bulkDelete}
             disabled={selectedCards.size === 0}
           >
-            <Ionicons name="trash-outline" size={20} color={selectedCards.size > 0 ? '#EF4444' : '#475569'} />
-            <Text style={[styles.selActionText, { color: selectedCards.size > 0 ? '#EF4444' : '#475569' }]}>Eliminar</Text>
+            <Ionicons name="trash-outline" size={20} color={selectedCards.size > 0 ? palette.danger : palette.textMuted} />
+            <Text style={[styles.selActionText, { color: selectedCards.size > 0 ? palette.danger : palette.textMuted }]}>Eliminar</Text>
           </TouchableOpacity>
         </View>
       )}
@@ -511,7 +501,7 @@ export default function FolderDetailScreen() {
               </Text>
               {allFolders.filter(f => f.id !== id).map(f => (
                 <TouchableOpacity key={f.id} style={styles.sheetOption} onPress={() => bulkAssignFolder(f.id)}>
-                  <FolderIcon game={f.is_default ? (f.game ?? null) : null} color={f.color} boxSize={36} iconSize={20} borderRadius={8} />
+                  <FolderIcon game={null} color={f.color} boxSize={36} iconSize={20} borderRadius={8} />
                   <Text style={styles.sheetOptionText}>{f.name}</Text>
                 </TouchableOpacity>
               ))}
@@ -547,20 +537,20 @@ export default function FolderDetailScreen() {
               <View style={styles.sheetHandle} />
               <Text style={styles.sheetTitle}>Agregar cartas</Text>
               <TouchableOpacity style={styles.sheetOption} onPress={openSearchNewCard}>
-                <Ionicons name="search-outline" size={20} color="#6366F1" />
+                <Ionicons name="search-outline" size={20} color={palette.primary} />
                 <View style={{ flex: 1 }}>
                   <Text style={styles.sheetOptionText}>Buscar nueva carta</Text>
                   <Text style={styles.sheetOptionDesc}>Por set o por nombre</Text>
                 </View>
-                <Ionicons name="chevron-forward" size={18} color="#64748B" />
+                <Ionicons name="chevron-forward" size={18} color={palette.textMuted} />
               </TouchableOpacity>
               <TouchableOpacity style={[styles.sheetOption, { borderBottomWidth: 0 }]} onPress={openExistingPicker}>
-                <Ionicons name="albums-outline" size={20} color="#6366F1" />
+                <Ionicons name="albums-outline" size={20} color={palette.primary} />
                 <View style={{ flex: 1 }}>
                   <Text style={styles.sheetOptionText}>De mi colección</Text>
-                  <Text style={styles.sheetOptionDesc}>Mover cartas que ya tenés</Text>
+                  <Text style={styles.sheetOptionDesc}>Mover cartas que ya tienes</Text>
                 </View>
-                <Ionicons name="chevron-forward" size={18} color="#64748B" />
+                <Ionicons name="chevron-forward" size={18} color={palette.textMuted} />
               </TouchableOpacity>
             </View>
           </TouchableOpacity>
@@ -569,8 +559,6 @@ export default function FolderDetailScreen() {
     </SafeAreaView>
   );
 }
-
-// ─── Card picker modal ────────────────────────────────────────────────────────
 
 function CardPickerModal({
   visible, folderId, folderColor, folderGame, userId, onClose, onAdded,
@@ -584,6 +572,8 @@ function CardPickerModal({
   onAdded: () => void;
 }) {
   const dialog = useDialog();
+  const { palette } = useTheme();
+  const styles = useStyles();
   const [allCards, setAllCards] = useState<CardCollection[]>([]);
   const [search, setSearch] = useState('');
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -665,11 +655,11 @@ function CardPickerModal({
           value={search}
           onChangeText={setSearch}
           placeholder="Buscar carta..."
-          placeholderTextColor="#475569"
+          placeholderTextColor={palette.textMuted}
         />
 
         {loading ? (
-          <ActivityIndicator style={{ flex: 1 }} color="#94A3B8" />
+          <ActivityIndicator style={{ flex: 1 }} color={palette.textSecondary} />
         ) : (
           <FlatList
             data={filtered}
@@ -724,8 +714,6 @@ function CardPickerModal({
   );
 }
 
-// ─── Card item ────────────────────────────────────────────────────────────────
-
 function CardItem({ card, onPress, onLongPress, selected, selectionMode, currency = 'usd', usdToClp = 950 }: {
   card: CardCollectionWithPrice;
   onPress: () => void;
@@ -735,6 +723,7 @@ function CardItem({ card, onPress, onLongPress, selected, selectionMode, currenc
   currency?: import('@/types/database').Currency;
   usdToClp?: number;
 }) {
+  const styles = useStyles();
   const gameIcon = GAME_ICON[card.game];
   const price = effectivePrice(card, currency, usdToClp);
   return (
@@ -765,122 +754,119 @@ function CardItem({ card, onPress, onLongPress, selected, selectionMode, currenc
   );
 }
 
-// ─── Styles ───────────────────────────────────────────────────────────────────
-
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#0F172A' },
+const useStyles = makeStyles((p) => ({
+  container: { flex: 1, backgroundColor: p.bg },
   header: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
     paddingHorizontal: 16, paddingVertical: 12,
-    borderBottomWidth: 1, borderBottomColor: '#1E293B',
+    borderBottomWidth: 1, borderBottomColor: p.surface,
   },
   backBtn: { flexDirection: 'row', alignItems: 'center', gap: 2, minWidth: 80 },
-  back: { color: '#6366F1', fontSize: 15 },
+  back: { color: p.primary, fontSize: 15 },
   headerCenter: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 },
   folderDot: { width: 10, height: 10, borderRadius: 5 },
-  title: { fontSize: 17, fontWeight: '700', color: '#F1F5F9' },
+  title: { fontSize: 17, fontWeight: '700', color: p.textPrimary },
   headerActions: { flexDirection: 'row', alignItems: 'center', gap: 4, minWidth: 80, justifyContent: 'flex-end' },
   headerIconBtn: { padding: 6 },
-  subtitle: { color: '#64748B', fontSize: 13, paddingHorizontal: 16, paddingTop: 10, paddingBottom: 4 },
-  subtitleValue: { color: '#4ADE80' },
+  subtitle: { color: p.textMuted, fontSize: 13, paddingHorizontal: 16, paddingTop: 10, paddingBottom: 4 },
+  subtitleValue: { color: p.successAlt },
   sortRow: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 16, paddingVertical: 8 },
-  sortLabel: { color: '#64748B', fontSize: 12, fontWeight: '600' },
+  sortLabel: { color: p.textMuted, fontSize: 12, fontWeight: '600' },
   sortChip: {
     flexDirection: 'row', alignItems: 'center',
     paddingHorizontal: 12, paddingVertical: 6, borderRadius: 14,
-    backgroundColor: '#1E293B', borderWidth: 1, borderColor: '#334155',
+    backgroundColor: p.surface, borderWidth: 1, borderColor: p.border,
   },
-  sortChipActive: { backgroundColor: '#6366F1', borderColor: '#6366F1' },
-  sortChipText: { color: '#94A3B8', fontSize: 12, fontWeight: '600' },
+  sortChipActive: { backgroundColor: p.primary, borderColor: p.primary },
+  sortChipText: { color: p.textSecondary, fontSize: 12, fontWeight: '600' },
   sortChipTextActive: { color: '#fff' },
 
   emptyBox: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 10, padding: 32 },
-  emptyTitle: { color: '#F1F5F9', fontSize: 18, fontWeight: '700' },
-  emptyText: { color: '#64748B', fontSize: 14, textAlign: 'center' },
+  emptyTitle: { color: p.textPrimary, fontSize: 18, fontWeight: '700' },
+  emptyText: { color: p.textMuted, fontSize: 14, textAlign: 'center' },
 
   sheetOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'flex-end' },
   sheet: {
-    backgroundColor: '#1E293B', borderTopLeftRadius: 20, borderTopRightRadius: 20,
+    backgroundColor: p.surface, borderTopLeftRadius: 20, borderTopRightRadius: 20,
     paddingBottom: 32,
   },
   sheetHandle: {
     width: 40, height: 4, borderRadius: 2,
-    backgroundColor: '#334155', alignSelf: 'center', marginTop: 12, marginBottom: 4,
+    backgroundColor: p.surfaceAlt, alignSelf: 'center', marginTop: 12, marginBottom: 4,
   },
-  sheetTitle: { fontSize: 16, fontWeight: '700', color: '#F1F5F9', padding: 16, paddingBottom: 8 },
+  sheetTitle: { fontSize: 16, fontWeight: '700', color: p.textPrimary, padding: 16, paddingBottom: 8 },
   sheetOption: {
     flexDirection: 'row', alignItems: 'center', gap: 14,
     paddingHorizontal: 16, paddingVertical: 14,
-    borderBottomWidth: 1, borderBottomColor: '#334155',
+    borderBottomWidth: 1, borderBottomColor: p.border,
   },
-  sheetOptionText: { color: '#F1F5F9', fontSize: 15, fontWeight: '600' },
-  sheetOptionDesc: { color: '#64748B', fontSize: 12, marginTop: 2 },
+  sheetOptionText: { color: p.textPrimary, fontSize: 15, fontWeight: '600' },
+  sheetOptionDesc: { color: p.textMuted, fontSize: 12, marginTop: 2 },
 
-  selAllText: { color: '#6366F1', fontSize: 14, fontWeight: '600' },
-  selCancelText: { color: '#94A3B8', fontSize: 14, fontWeight: '600' },
+  selAllText: { color: p.primary, fontSize: 14, fontWeight: '600' },
+  selCancelText: { color: p.textSecondary, fontSize: 14, fontWeight: '600' },
   selCheckBadge: {
     position: 'absolute', top: 6, left: 6,
     width: 18, height: 18, borderRadius: 9,
-    backgroundColor: '#0F172A', borderWidth: 1.5, borderColor: '#475569',
+    backgroundColor: p.bg, borderWidth: 1.5, borderColor: p.textMuted,
     alignItems: 'center', justifyContent: 'center',
   },
-  selCheckBadgeActive: { backgroundColor: '#6366F1', borderColor: '#6366F1' },
-  thumbSelected: { borderColor: '#6366F1', borderWidth: 2 },
+  selCheckBadgeActive: { backgroundColor: p.primary, borderColor: p.primary },
+  thumbSelected: { borderColor: p.primary, borderWidth: 2 },
   selectionActionBar: {
     position: 'absolute', bottom: 0, left: 0, right: 0,
-    backgroundColor: '#1E293B', borderTopWidth: 1, borderTopColor: '#334155',
+    backgroundColor: p.surface, borderTopWidth: 1, borderTopColor: p.border,
     flexDirection: 'row', padding: 12, paddingBottom: 28, gap: 6,
   },
   selActionBtn: {
     flex: 1, alignItems: 'center', justifyContent: 'center',
     paddingVertical: 10, borderRadius: 12, gap: 4,
-    backgroundColor: '#0F172A', borderWidth: 1, borderColor: '#334155',
+    backgroundColor: p.bg, borderWidth: 1, borderColor: p.border,
   },
-  selActionBtnDanger: { borderColor: '#EF444430' },
+  selActionBtnDanger: { borderColor: p.danger + '30' },
   selActionBtnDisabled: { opacity: 0.35 },
-  selActionText: { color: '#F1F5F9', fontSize: 11, fontWeight: '600' },
-  selActionTextDisabled: { color: '#475569' },
-  folderRowIcon: { width: 36, height: 36, borderRadius: 8, alignItems: 'center', justifyContent: 'center' },
-  noFoldersText: { color: '#64748B', fontSize: 13, padding: 16, textAlign: 'center' },
+  selActionText: { color: p.textPrimary, fontSize: 11, fontWeight: '600' },
+  selActionTextDisabled: { color: p.textMuted },
+  noFoldersText: { color: p.textMuted, fontSize: 13, padding: 16, textAlign: 'center' },
 
   thumb: {
     width: CARD_WIDTH, margin: 4, alignItems: 'center',
-    backgroundColor: '#1E293B', borderRadius: 10, padding: 8,
-    borderWidth: 1, borderColor: '#334155',
+    backgroundColor: p.surface, borderRadius: 10, padding: 8,
+    borderWidth: 1, borderColor: p.border,
   },
   thumbImg: { width: '100%', aspectRatio: 0.715, borderRadius: 6 },
   thumbPlaceholder: {
     width: '100%', aspectRatio: 0.715, borderRadius: 6,
-    backgroundColor: '#0F172A', alignItems: 'center', justifyContent: 'center',
+    backgroundColor: p.bg, alignItems: 'center', justifyContent: 'center',
   },
   thumbFooter: { flexDirection: 'row', alignItems: 'center', marginTop: 4, gap: 3 },
-  thumbNum: { color: '#64748B', fontSize: 9, fontWeight: '600', flexShrink: 0 },
-  thumbName: { color: '#F1F5F9', fontSize: 9, fontWeight: '600', flex: 1 },
-  thumbPrice: { color: '#4ADE80', fontSize: 9, fontWeight: '600', flexShrink: 0 },
+  thumbNum: { color: p.textMuted, fontSize: 9, fontWeight: '600', flexShrink: 0 },
+  thumbName: { color: p.textPrimary, fontSize: 9, fontWeight: '600', flex: 1 },
+  thumbPrice: { color: p.successAlt, fontSize: 9, fontWeight: '600', flexShrink: 0 },
   qtyBadge: {
     position: 'absolute', bottom: 28, right: 4,
-    backgroundColor: '#1E293B', borderRadius: 8, borderWidth: 1, borderColor: '#334155',
+    backgroundColor: p.surface, borderRadius: 8, borderWidth: 1, borderColor: p.border,
     paddingHorizontal: 5, paddingVertical: 1,
   },
-  qtyText: { color: '#94A3B8', fontSize: 9, fontWeight: '700' },
+  qtyText: { color: p.textSecondary, fontSize: 9, fontWeight: '700' },
   checkBadge: {
     position: 'absolute', top: 4, right: 4,
     width: 20, height: 20, borderRadius: 10,
     alignItems: 'center', justifyContent: 'center',
   },
 
-  modalContainer: { flex: 1, backgroundColor: '#0F172A' },
+  modalContainer: { flex: 1, backgroundColor: p.bg },
   modalHeader: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    padding: 16, borderBottomWidth: 1, borderBottomColor: '#1E293B',
+    padding: 16, borderBottomWidth: 1, borderBottomColor: p.surface,
   },
-  modalCancel: { color: '#6366F1', fontSize: 15, minWidth: 70 },
-  modalTitle: { fontSize: 16, fontWeight: '700', color: '#F1F5F9' },
+  modalCancel: { color: p.primary, fontSize: 15, minWidth: 70 },
+  modalTitle: { fontSize: 16, fontWeight: '700', color: p.textPrimary },
   modalSaveBtn: { borderRadius: 8, paddingHorizontal: 14, paddingVertical: 7, minWidth: 70, alignItems: 'center' },
   modalSaveBtnText: { color: '#fff', fontSize: 13, fontWeight: '700' },
   modalSearch: {
     margin: 12,
-    backgroundColor: '#1E293B', borderWidth: 1, borderColor: '#334155',
-    borderRadius: 12, padding: 12, fontSize: 14, color: '#F1F5F9',
+    backgroundColor: p.surface, borderWidth: 1, borderColor: p.border,
+    borderRadius: 12, padding: 12, fontSize: 14, color: p.textPrimary,
   },
-});
+}));

@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { requestCollectionRefresh } from '@/lib/collectionRefresh';
 import {
-  View, Text, TextInput, TouchableOpacity, StyleSheet,
+  View, Text, TextInput, TouchableOpacity,
   ScrollView, FlatList,
   ActivityIndicator, Switch, Dimensions, Modal, Pressable,
 } from 'react-native';
@@ -13,16 +13,15 @@ import { usePreventRemove } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/context/AuthContext';
+import { useTheme } from '@/context/ThemeContext';
 import type { TCGGame, CardCondition, CardLanguage } from '@/types/database';
-import { getOrCreateDefaultFolder } from '@/lib/defaultFolders';
 import { getUsdToClp } from '@/lib/exchangeRate';
 import { formatPrice, currencyLabel } from '@/lib/currency';
 import { resolveEnabledGames } from '@/lib/enabledGames';
 import { validateFolderGame, gameLabel } from '@/lib/folderValidation';
+import { makeStyles } from '@/lib/theme';
 
 type IoniconName = React.ComponentProps<typeof Ionicons>['name'];
-
-// ─── Types ────────────────────────────────────────────────────────────────────
 
 type PkmSet = {
   id: string;
@@ -55,8 +54,6 @@ type MtgSet = {
   released_at: string;
 };
 
-// ─── Wizard state ─────────────────────────────────────────────────────────────
-
 type Page =
   | { page: 'game' }
   | { page: 'method'; game: TCGGame }
@@ -64,8 +61,6 @@ type Page =
   | { page: 'cards-in-set'; game: TCGGame; setId: string; setName: string }
   | { page: 'search-name'; game: TCGGame }
   | { page: 'confirm'; game: TCGGame; card: PkmCard };
-
-// ─── Constants ────────────────────────────────────────────────────────────────
 
 const GAMES: { value: TCGGame; label: string; icon: IoniconName; color: string; image?: ReturnType<typeof require> }[] = [
   { value: 'pokemon', label: 'Pokémon', icon: 'flash-outline', color: '#FACC15', image: require('../../../assets/pokemon-tcg-logo.png') },
@@ -93,7 +88,7 @@ const LANGUAGES: { value: CardLanguage; label: string }[] = [
   { value: 'other', label: 'Otro' },
 ];
 
-const CARD_WIDTH = (Dimensions.get('window').width - 16 - 24) / 3; // padding 8*2 + margin 4*2*3
+const CARD_WIDTH = (Dimensions.get('window').width - 16 - 24) / 3;
 
 const MTG_SET_TYPES = new Set(['core', 'expansion', 'masters', 'draft_innovation', 'commander', 'starter']);
 
@@ -107,8 +102,6 @@ function getTitle(p: Page): string {
     case 'confirm': return p.card.name;
   }
 }
-
-// ─── Upsert helper ───────────────────────────────────────────────────────────
 
 type CardInsertRow = {
   user_id: string;
@@ -179,17 +172,17 @@ async function upsertCollectionCards(rows: CardInsertRow[]): Promise<{ error: an
   return { error: null };
 }
 
-// ─── Main screen ──────────────────────────────────────────────────────────────
-
 type SaveCtx = { total: number; saving: boolean; save: () => void };
 
 export default function AddCardScreen() {
   const { user, profile } = useAuth();
+  const { palette } = useTheme();
   const dialog = useDialog();
   const currency = profile?.currency ?? 'usd';
   const router = useRouter();
   const navigation = useNavigation();
   const params = useLocalSearchParams<{ folderId?: string; game?: TCGGame }>();
+  const styles = useStyles();
   const lockedFolderId = typeof params.folderId === 'string' ? params.folderId : null;
   const initialGame = typeof params.game === 'string' ? (params.game as TCGGame) : null;
   const enabledGames = resolveEnabledGames(profile?.enabled_games);
@@ -219,21 +212,16 @@ export default function AddCardScreen() {
       }
       return { folderId: lockedFolderId };
     }
-    if (!user) return { folderId: null };
-    return { folderId: await getOrCreateDefaultFolder(user.id, game) };
+    return { folderId: null };
   }
 
   const current = stack[stack.length - 1];
   const inWizard = stack.length > 1;
 
-  // Deshabilita el gesto nativo cuando estamos dentro del wizard.
-  // usePreventRemove no es suficiente en native-stack porque el gesto
-  // ya remueve la pantalla a nivel nativo antes de que JS pueda actuar.
   useEffect(() => {
     (navigation as any).setOptions({ gestureEnabled: !inWizard });
   }, [navigation, inWizard]);
 
-  // Maneja el botón back de Android (hardware)
   usePreventRemove(inWizard && !saved, () => {
     attemptPop();
   });
@@ -280,7 +268,7 @@ export default function AddCardScreen() {
     <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
       <View style={styles.header}>
         <TouchableOpacity onPress={pop} style={styles.backBtn}>
-          <Ionicons name="chevron-back" size={20} color="#6366F1" />
+          <Ionicons name="chevron-back" size={20} color={palette.primary} />
           <Text style={styles.back}>{stack.length <= 1 ? 'Cancelar' : 'Volver'}</Text>
         </TouchableOpacity>
         <Text style={styles.title} numberOfLines={1}>{getTitle(current)}</Text>
@@ -343,16 +331,16 @@ export default function AddCardScreen() {
           usdToClp={usdToClp}
         />
       )}
-{current.page === 'confirm' && (
+      {current.page === 'confirm' && (
         <ConfirmStep game={current.game} card={current.card} userId={user!.id} onSave={onSave} resolveFolderId={resolveFolderId} currency={currency} usdToClp={usdToClp} />
       )}
     </SafeAreaView>
   );
 }
 
-// ─── Step: Game ───────────────────────────────────────────────────────────────
-
 function GameStep({ onSelect, enabledGames }: { onSelect: (g: TCGGame) => void; enabledGames: TCGGame[] }) {
+  const styles = useStyles();
+  const { palette } = useTheme();
   const visible = GAMES.filter(g => enabledGames.includes(g.value));
   return (
     <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollPad}>
@@ -365,14 +353,12 @@ function GameStep({ onSelect, enabledGames }: { onSelect: (g: TCGGame) => void; 
               : <Ionicons name={g.icon} size={30} color={g.color} />}
           </View>
           <Text style={styles.bigCardLabel}>{g.label}</Text>
-          <Ionicons name="chevron-forward" size={18} color="#475569" />
+          <Ionicons name="chevron-forward" size={18} color={palette.textMuted} />
         </TouchableOpacity>
       ))}
     </ScrollView>
   );
 }
-
-// ─── Step: Method ─────────────────────────────────────────────────────────────
 
 function MethodStep({
   game, onSet, onName,
@@ -381,6 +367,7 @@ function MethodStep({
   onSet: () => void;
   onName: () => void;
 }) {
+  const styles = useStyles();
   const hasNameSearch = game === 'pokemon';
   return (
     <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollPad}>
@@ -396,21 +383,21 @@ function MethodStep({
 function MethodOption({ icon, label, desc, onPress, muted }: {
   icon: IoniconName; label: string; desc: string; onPress: () => void; muted?: boolean;
 }) {
+  const styles = useStyles();
+  const { palette } = useTheme();
   return (
     <TouchableOpacity style={[styles.methodCard, muted && styles.methodCardMuted]} onPress={onPress}>
       <View style={[styles.methodIconBox, muted && styles.methodIconBoxMuted]}>
-        <Ionicons name={icon} size={24} color={muted ? '#475569' : '#A5B4FC'} />
+        <Ionicons name={icon} size={24} color={muted ? palette.textMuted : palette.primary} />
       </View>
       <View style={{ flex: 1 }}>
         <Text style={[styles.methodLabel, muted && styles.methodLabelMuted]}>{label}</Text>
         <Text style={styles.methodDesc}>{desc}</Text>
       </View>
-      <Ionicons name="chevron-forward" size={18} color="#475569" />
+      <Ionicons name="chevron-forward" size={18} color={palette.textMuted} />
     </TouchableOpacity>
   );
 }
-
-// ─── Step: Sets ───────────────────────────────────────────────────────────────
 
 function SetsStep({ game, onSelect }: { game: TCGGame; onSelect: (id: string, name: string) => void }) {
   if (game === 'magic') return <MagicSetsStep onSelect={onSelect} />;
@@ -419,6 +406,8 @@ function SetsStep({ game, onSelect }: { game: TCGGame; onSelect: (id: string, na
 
 function PokemonSetsStep({ onSelect }: { onSelect: (id: string, name: string) => void }) {
   const dialog = useDialog();
+  const styles = useStyles();
+  const { palette } = useTheme();
   const [sets, setSets] = useState<PkmSet[]>([]);
   const [filtered, setFiltered] = useState<PkmSet[]>([]);
   const [search, setSearch] = useState('');
@@ -443,7 +432,7 @@ function PokemonSetsStep({ onSelect }: { onSelect: (id: string, name: string) =>
     setFiltered(sets.filter(s => s.name.toLowerCase().includes(q) || s.series.toLowerCase().includes(q)));
   }, [search, sets]);
 
-  if (loading) return <ActivityIndicator style={{ flex: 1, marginTop: 40 }} color="#94A3B8" />;
+  if (loading) return <ActivityIndicator style={{ flex: 1, marginTop: 40 }} color={palette.textSecondary} />;
 
   return (
     <View style={{ flex: 1 }}>
@@ -452,7 +441,7 @@ function PokemonSetsStep({ onSelect }: { onSelect: (id: string, name: string) =>
         value={search}
         onChangeText={setSearch}
         placeholder="Buscar set o serie..."
-        placeholderTextColor="#475569"
+        placeholderTextColor={palette.textMuted}
       />
       <FlatList
         data={filtered}
@@ -464,7 +453,7 @@ function PokemonSetsStep({ onSelect }: { onSelect: (id: string, name: string) =>
               <Text style={styles.setName}>{item.name}</Text>
               <Text style={styles.setMeta}>{item.series} · {item.total} cartas</Text>
             </View>
-            <Ionicons name="chevron-forward" size={16} color="#475569" />
+            <Ionicons name="chevron-forward" size={16} color={palette.textMuted} />
           </TouchableOpacity>
         )}
         contentContainerStyle={{ paddingBottom: 20 }}
@@ -480,6 +469,8 @@ const MTG_TYPE_LABEL: Record<string, string> = {
 
 function MagicSetsStep({ onSelect }: { onSelect: (id: string, name: string) => void }) {
   const dialog = useDialog();
+  const styles = useStyles();
+  const { palette } = useTheme();
   const [sets, setSets] = useState<MtgSet[]>([]);
   const [filtered, setFiltered] = useState<MtgSet[]>([]);
   const [search, setSearch] = useState('');
@@ -507,7 +498,7 @@ function MagicSetsStep({ onSelect }: { onSelect: (id: string, name: string) => v
     setFiltered(sets.filter(s => s.name.toLowerCase().includes(q) || s.id.toLowerCase().includes(q)));
   }, [search, sets]);
 
-  if (loading) return <ActivityIndicator style={{ flex: 1, marginTop: 40 }} color="#94A3B8" />;
+  if (loading) return <ActivityIndicator style={{ flex: 1, marginTop: 40 }} color={palette.textSecondary} />;
 
   return (
     <View style={{ flex: 1 }}>
@@ -516,7 +507,7 @@ function MagicSetsStep({ onSelect }: { onSelect: (id: string, name: string) => v
         value={search}
         onChangeText={setSearch}
         placeholder="Buscar set..."
-        placeholderTextColor="#475569"
+        placeholderTextColor={palette.textMuted}
       />
       <FlatList
         data={filtered}
@@ -532,7 +523,7 @@ function MagicSetsStep({ onSelect }: { onSelect: (id: string, name: string) => v
                 {MTG_TYPE_LABEL[item.set_type] ?? item.set_type} · {item.card_count} cartas · {item.released_at?.slice(0, 4)}
               </Text>
             </View>
-            <Ionicons name="chevron-forward" size={16} color="#475569" />
+            <Ionicons name="chevron-forward" size={16} color={palette.textMuted} />
           </TouchableOpacity>
         )}
         contentContainerStyle={{ paddingBottom: 20 }}
@@ -540,8 +531,6 @@ function MagicSetsStep({ onSelect }: { onSelect: (id: string, name: string) => v
     </View>
   );
 }
-
-// ─── Step: Cards in set ───────────────────────────────────────────────────────
 
 type Selection = { card: PkmCard; qty: number };
 
@@ -556,6 +545,8 @@ function CardsInSetStep({ setId, game, userId, onSave, onCtxChange, resolveFolde
   usdToClp: number;
 }) {
   const dialog = useDialog();
+  const styles = useStyles();
+  const { palette } = useTheme();
   const [cards, setCards] = useState<PkmCard[]>([]);
   const [loading, setLoading] = useState(true);
   const [selected, setSelected] = useState<Map<string, Selection>>(new Map());
@@ -668,7 +659,7 @@ function CardsInSetStep({ setId, game, userId, onSave, onCtxChange, resolveFolde
     return () => onCtxChange(null);
   }, []);
 
-  if (loading) return <ActivityIndicator style={{ flex: 1, marginTop: 40 }} color="#94A3B8" />;
+  if (loading) return <ActivityIndicator style={{ flex: 1, marginTop: 40 }} color={palette.textSecondary} />;
 
   return (
     <View style={{ flex: 1 }}>
@@ -693,7 +684,7 @@ function CardsInSetStep({ setId, game, userId, onSave, onCtxChange, resolveFolde
                 {(() => { const p = item.tcgplayer_normal_market ?? item.tcgplayer_foil_market; return p ? <Text style={styles.thumbPrice}>{formatPrice(p, currency, usdToClp)}</Text> : null; })()}
               </View>
               <View style={styles.zoomHint} pointerEvents="none">
-                <Ionicons name="expand-outline" size={12} color="#F1F5F9" />
+                <Ionicons name="expand-outline" size={12} color={palette.textPrimary} />
               </View>
               {qty > 0 ? (
                 <TouchableOpacity style={styles.qtyBadge} onPress={() => removeCard(item.id)} hitSlop={{ top: 4, bottom: 4, left: 4, right: 4 }}>
@@ -713,7 +704,6 @@ function CardsInSetStep({ setId, game, userId, onSave, onCtxChange, resolveFolde
 
       <CardPreviewModal card={previewCard} onClose={() => setPreviewCard(null)} onAdd={(c) => { tapCard(c); setPreviewCard(null); }} qty={previewCard ? selected.get(previewCard.id)?.qty ?? 0 : 0} currency={currency} usdToClp={usdToClp} />
 
-      {/* Bottom panel */}
       <View style={styles.setBottomPanel}>
         <View style={styles.setBottomRow}>
           <Text style={styles.setBottomLabel}>Condición</Text>
@@ -748,8 +738,6 @@ function CardsInSetStep({ setId, game, userId, onSave, onCtxChange, resolveFolde
   );
 }
 
-// ─── Step: Search by name ─────────────────────────────────────────────────────
-
 function SearchNameStep({ game, userId, onSave, onCtxChange, resolveFolderId, currency, usdToClp }: {
   game: TCGGame;
   userId: string;
@@ -760,6 +748,8 @@ function SearchNameStep({ game, userId, onSave, onCtxChange, resolveFolderId, cu
   usdToClp: number;
 }) {
   const dialog = useDialog();
+  const styles = useStyles();
+  const { palette } = useTheme();
   const [query, setQuery] = useState('');
   const [cards, setCards] = useState<PkmCard[]>([]);
   const [loading, setLoading] = useState(false);
@@ -853,10 +843,10 @@ function SearchNameStep({ game, userId, onSave, onCtxChange, resolveFolderId, cu
         value={query}
         onChangeText={setQuery}
         placeholder="Ej: Charizard, Pikachu..."
-        placeholderTextColor="#475569"
+        placeholderTextColor={palette.textMuted}
         autoFocus
       />
-      {loading && <ActivityIndicator style={{ marginTop: 24 }} color="#94A3B8" />}
+      {loading && <ActivityIndicator style={{ marginTop: 24 }} color={palette.textSecondary} />}
       {!loading && (
         <FlatList
           data={cards}
@@ -882,7 +872,7 @@ function SearchNameStep({ game, userId, onSave, onCtxChange, resolveFolderId, cu
                   {(() => { const p = item.tcgplayer_normal_market ?? item.tcgplayer_foil_market; return p ? <Text style={styles.thumbPrice}>{formatPrice(p, currency, usdToClp)}</Text> : null; })()}
                 </View>
                 <View style={styles.zoomHint} pointerEvents="none">
-                  <Ionicons name="expand-outline" size={12} color="#F1F5F9" />
+                  <Ionicons name="expand-outline" size={12} color={palette.textPrimary} />
                 </View>
                 {qty > 0 ? (
                   <TouchableOpacity style={styles.qtyBadge} onPress={() => removeCard(item.id)} hitSlop={{ top: 4, bottom: 4, left: 4, right: 4 }}>
@@ -904,7 +894,7 @@ function SearchNameStep({ game, userId, onSave, onCtxChange, resolveFolderId, cu
               </View>
             ) : (
               <View style={styles.emptySearch}>
-                <Ionicons name="search-outline" size={40} color="#334155" />
+                <Ionicons name="search-outline" size={40} color={palette.surfaceAlt} />
                 <Text style={styles.emptySearchText}>Escribe el nombre del Pokémon</Text>
               </View>
             )
@@ -949,8 +939,6 @@ function SearchNameStep({ game, userId, onSave, onCtxChange, resolveFolderId, cu
   );
 }
 
-// ─── Card preview modal ───────────────────────────────────────────────────────
-
 function CardPreviewModal({ card, onClose, onAdd, qty, currency, usdToClp }: {
   card: PkmCard | null;
   onClose: () => void;
@@ -959,6 +947,7 @@ function CardPreviewModal({ card, onClose, onAdd, qty, currency, usdToClp }: {
   currency: import('@/types/database').Currency;
   usdToClp: number;
 }) {
+  const styles = useStyles();
   if (!card) return null;
   const price = card.tcgplayer_normal_market ?? card.tcgplayer_foil_market;
   return (
@@ -983,8 +972,6 @@ function CardPreviewModal({ card, onClose, onAdd, qty, currency, usdToClp }: {
   );
 }
 
-// ─── Step: Confirm (after API card selection) ─────────────────────────────────
-
 function ConfirmStep({ game, card, userId, onSave, resolveFolderId, currency, usdToClp }: {
   game: TCGGame; card: PkmCard; userId: string; onSave: () => void;
   resolveFolderId: (game: TCGGame) => Promise<{ folderId: string | null } | { error: string }>;
@@ -992,6 +979,8 @@ function ConfirmStep({ game, card, userId, onSave, resolveFolderId, currency, us
   usdToClp: number;
 }) {
   const dialog = useDialog();
+  const styles = useStyles();
+  const { palette } = useTheme();
   const [condition, setCondition] = useState<CardCondition>('mint');
   const [quantity, setQuantity] = useState('1');
   const [price, setPrice] = useState('');
@@ -1048,11 +1037,11 @@ function ConfirmStep({ game, card, userId, onSave, resolveFolderId, currency, us
       <View style={styles.rowInputs}>
         <View style={{ flex: 1 }}>
           <Text style={styles.fieldLabel}>Cantidad</Text>
-          <TextInput style={styles.input} value={quantity} onChangeText={setQuantity} keyboardType="number-pad" placeholder="1" placeholderTextColor="#475569" />
+          <TextInput style={styles.input} value={quantity} onChangeText={setQuantity} keyboardType="number-pad" placeholder="1" placeholderTextColor={palette.textMuted} />
         </View>
         <View style={{ flex: 1 }}>
           <Text style={styles.fieldLabel}>Precio ref. ({currencyLabel(currency)})</Text>
-          <TextInput style={styles.input} value={price} onChangeText={setPrice} keyboardType={currency === 'clp' ? 'number-pad' : 'decimal-pad'} placeholder={currency === 'clp' ? '0' : '0.00'} placeholderTextColor="#475569" />
+          <TextInput style={styles.input} value={price} onChangeText={setPrice} keyboardType={currency === 'clp' ? 'number-pad' : 'decimal-pad'} placeholder={currency === 'clp' ? '0' : '0.00'} placeholderTextColor={palette.textMuted} />
         </View>
       </View>
 
@@ -1069,36 +1058,34 @@ function ConfirmStep({ game, card, userId, onSave, resolveFolderId, currency, us
   );
 }
 
-// ─── SwitchRow ────────────────────────────────────────────────────────────────
-
 function SwitchRow({ icon, label, value, onChange, last }: {
   icon: IoniconName; label: string; value: boolean; onChange: (v: boolean) => void; last?: boolean;
 }) {
+  const styles = useStyles();
+  const { palette } = useTheme();
   return (
     <View style={[styles.switchRow, last && styles.switchRowLast]}>
       <View style={styles.switchLabelRow}>
-        <Ionicons name={icon} size={16} color="#94A3B8" />
+        <Ionicons name={icon} size={16} color={palette.textSecondary} />
         <Text style={styles.switchLabel}>{label}</Text>
       </View>
-      <Switch value={value} onValueChange={onChange} trackColor={{ true: '#6366F1' }} />
+      <Switch value={value} onValueChange={onChange} trackColor={{ true: palette.primary }} />
     </View>
   );
 }
 
-// ─── Styles ───────────────────────────────────────────────────────────────────
-
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#0F172A' },
+const useStyles = makeStyles((p) => ({
+  container: { flex: 1, backgroundColor: p.bg },
   header: {
     flexDirection: 'row', alignItems: 'center',
     paddingHorizontal: 12, paddingVertical: 12,
-    borderBottomWidth: 1, borderBottomColor: '#1E293B',
+    borderBottomWidth: 1, borderBottomColor: p.surface,
   },
   backBtn: { flexDirection: 'row', alignItems: 'center', gap: 2, width: 90 },
-  back: { color: '#6366F1', fontSize: 15 },
-  title: { flex: 1, color: '#F1F5F9', fontSize: 17, fontWeight: '700', textAlign: 'center' },
+  back: { color: p.primary, fontSize: 15 },
+  title: { flex: 1, color: p.textPrimary, fontSize: 17, fontWeight: '700', textAlign: 'center' },
   headerSaveBtn: {
-    backgroundColor: '#6366F1', borderRadius: 8,
+    backgroundColor: p.primary, borderRadius: 8,
     paddingHorizontal: 12, paddingVertical: 6, minWidth: 90, maxWidth: 140,
     alignItems: 'center', justifyContent: 'center',
   },
@@ -1107,80 +1094,71 @@ const styles = StyleSheet.create({
 
   scroll: { flex: 1 },
   scrollPad: { padding: 16 },
-  hint: { color: '#94A3B8', fontSize: 14, marginBottom: 16 },
+  hint: { color: p.textSecondary, fontSize: 14, marginBottom: 16 },
 
-  // Game step
   bigCard: {
     flexDirection: 'row', alignItems: 'center', gap: 14,
-    backgroundColor: '#1E293B', borderRadius: 12, padding: 16,
-    marginBottom: 10, borderWidth: 1, borderColor: '#334155',
+    backgroundColor: p.surface, borderRadius: 12, padding: 16,
+    marginBottom: 10, borderWidth: 1, borderColor: p.border,
   },
   bigCardIcon: { width: 52, height: 52, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
-  bigCardLabel: { flex: 1, color: '#F1F5F9', fontSize: 16, fontWeight: '700' },
+  bigCardLabel: { flex: 1, color: p.textPrimary, fontSize: 16, fontWeight: '700' },
 
-  // Method step
   methodCard: {
     flexDirection: 'row', alignItems: 'center', gap: 14,
-    backgroundColor: '#1E293B', borderRadius: 12, padding: 16,
-    marginBottom: 10, borderWidth: 1, borderColor: '#334155',
+    backgroundColor: p.surface, borderRadius: 12, padding: 16,
+    marginBottom: 10, borderWidth: 1, borderColor: p.border,
   },
-  methodCardMuted: { backgroundColor: '#141E2E', borderColor: '#1E293B' },
-  methodIconBox: { width: 48, height: 48, borderRadius: 12, backgroundColor: '#1E1E4A', alignItems: 'center', justifyContent: 'center' },
-  methodIconBoxMuted: { backgroundColor: '#1E293B' },
-  methodLabel: { color: '#F1F5F9', fontSize: 15, fontWeight: '700' },
-  methodLabelMuted: { color: '#475569' },
-  methodDesc: { color: '#64748B', fontSize: 13, marginTop: 2 },
+  methodCardMuted: { backgroundColor: p.bg, borderColor: p.surface },
+  methodIconBox: { width: 48, height: 48, borderRadius: 12, backgroundColor: p.primaryMuted, alignItems: 'center', justifyContent: 'center' },
+  methodIconBoxMuted: { backgroundColor: p.surface },
+  methodLabel: { color: p.textPrimary, fontSize: 15, fontWeight: '700' },
+  methodLabelMuted: { color: p.textMuted },
+  methodDesc: { color: p.textMuted, fontSize: 13, marginTop: 2 },
 
-  soonBox: { alignItems: 'center', padding: 24, gap: 8, marginBottom: 16, backgroundColor: '#1E293B', borderRadius: 12 },
-  soonTitle: { color: '#64748B', fontSize: 16, fontWeight: '700' },
-  soonText: { color: '#475569', fontSize: 13, textAlign: 'center', lineHeight: 18 },
-
-  // Search bar (shared)
   searchBar: {
     margin: 12, marginBottom: 8,
-    backgroundColor: '#1E293B', borderWidth: 1, borderColor: '#334155',
-    borderRadius: 12, padding: 12, fontSize: 14, color: '#F1F5F9',
+    backgroundColor: p.surface, borderWidth: 1, borderColor: p.border,
+    borderRadius: 12, padding: 12, fontSize: 14, color: p.textPrimary,
   },
 
-  // Sets step
   setRow: {
     flexDirection: 'row', alignItems: 'center', gap: 12,
     paddingHorizontal: 16, paddingVertical: 12,
-    borderBottomWidth: 1, borderBottomColor: '#1E293B',
+    borderBottomWidth: 1, borderBottomColor: p.surface,
   },
   setSymbol: { width: 36, height: 36 },
   mtgSetCode: {
     width: 44, height: 36, borderRadius: 8,
-    backgroundColor: '#1E1E4A', alignItems: 'center', justifyContent: 'center',
+    backgroundColor: p.primaryMuted, alignItems: 'center', justifyContent: 'center',
   },
   mtgSetCodeText: { color: '#A78BFA', fontSize: 11, fontWeight: '800' },
-  setName: { color: '#F1F5F9', fontSize: 14, fontWeight: '600' },
-  setMeta: { color: '#64748B', fontSize: 12, marginTop: 1 },
+  setName: { color: p.textPrimary, fontSize: 14, fontWeight: '600' },
+  setMeta: { color: p.textMuted, fontSize: 12, marginTop: 1 },
 
-  // Card thumbnails grid
   thumb: {
     width: CARD_WIDTH, margin: 4, alignItems: 'center',
-    backgroundColor: '#1E293B', borderRadius: 10, padding: 8,
-    borderWidth: 1, borderColor: '#334155',
+    backgroundColor: p.surface, borderRadius: 10, padding: 8,
+    borderWidth: 1, borderColor: p.border,
   },
   thumbSelected: {
-    borderColor: '#6366F1', borderWidth: 2, backgroundColor: '#1e1e4a',
+    borderColor: p.primary, borderWidth: 2, backgroundColor: p.primaryMuted,
   },
   thumbImg: { width: '100%', aspectRatio: 0.715, borderRadius: 6 },
   thumbFooter: { flexDirection: 'row', alignItems: 'center', marginTop: 4, gap: 3 },
-  thumbNum: { color: '#64748B', fontSize: 9, fontWeight: '600', flexShrink: 0 },
-  thumbName: { color: '#F1F5F9', fontSize: 9, fontWeight: '600', flex: 1 },
-  thumbPrice: { color: '#4ADE80', fontSize: 9, fontWeight: '600', flexShrink: 0 },
+  thumbNum: { color: p.textMuted, fontSize: 9, fontWeight: '600', flexShrink: 0 },
+  thumbName: { color: p.textPrimary, fontSize: 9, fontWeight: '600', flex: 1 },
+  thumbPrice: { color: p.successAlt, fontSize: 9, fontWeight: '600', flexShrink: 0 },
   qtyBadge: {
     position: 'absolute', top: 4, right: 4,
-    backgroundColor: '#6366F1', borderRadius: 12,
+    backgroundColor: p.primary, borderRadius: 12,
     flexDirection: 'row', alignItems: 'center', gap: 2,
     paddingHorizontal: 7, paddingVertical: 3,
   },
   qtyText: { color: '#fff', fontSize: 11, fontWeight: '700' },
   addBadge: {
     position: 'absolute', top: 4, right: 4,
-    backgroundColor: 'rgba(99,102,241,0.92)',
+    backgroundColor: p.primary,
     borderRadius: 14, width: 26, height: 26,
     alignItems: 'center', justifyContent: 'center',
   },
@@ -1191,14 +1169,13 @@ const styles = StyleSheet.create({
     alignItems: 'center', justifyContent: 'center',
   },
 
-  // Card preview modal
   previewBackdrop: {
     flex: 1, backgroundColor: 'rgba(0,0,0,0.85)',
     alignItems: 'center', justifyContent: 'center', padding: 24,
   },
   previewCardBox: {
-    backgroundColor: '#1E293B', borderRadius: 16,
-    borderWidth: 1, borderColor: '#334155',
+    backgroundColor: p.surface, borderRadius: 16,
+    borderWidth: 1, borderColor: p.border,
     padding: 16, gap: 8, alignItems: 'center',
     maxWidth: 360, width: '100%',
   },
@@ -1206,72 +1183,57 @@ const styles = StyleSheet.create({
     width: 240, aspectRatio: 0.715, borderRadius: 10,
   },
   previewLabelName: {
-    color: '#F1F5F9', fontSize: 18, fontWeight: '800',
+    color: p.textPrimary, fontSize: 18, fontWeight: '800',
     textAlign: 'center', marginTop: 8,
   },
-  previewLabelMeta: { color: '#64748B', fontSize: 13 },
-  previewLabelPrice: { color: '#4ADE80', fontSize: 14, fontWeight: '700' },
+  previewLabelMeta: { color: p.textMuted, fontSize: 13 },
+  previewLabelPrice: { color: p.successAlt, fontSize: 14, fontWeight: '700' },
   previewAddBtn: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6,
-    backgroundColor: '#6366F1', borderRadius: 12,
+    backgroundColor: p.primary, borderRadius: 12,
     paddingVertical: 12, paddingHorizontal: 20,
     marginTop: 8, alignSelf: 'stretch',
   },
   previewAddBtnText: { color: '#fff', fontSize: 15, fontWeight: '700' },
 
-  // Set bottom panel
   setBottomPanel: {
-    borderTopWidth: 1, borderTopColor: '#334155',
-    backgroundColor: '#0F172A', padding: 12, gap: 10,
+    borderTopWidth: 1, borderTopColor: p.border,
+    backgroundColor: p.bg, padding: 12, gap: 10,
   },
   setBottomRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  setBottomLabel: { color: '#64748B', fontSize: 11, fontWeight: '600', width: 62 },
+  setBottomLabel: { color: p.textMuted, fontSize: 11, fontWeight: '600', width: 62 },
   miniChip: {
     paddingHorizontal: 10, paddingVertical: 5,
-    borderRadius: 8, borderWidth: 1, borderColor: '#334155',
-    backgroundColor: '#1E293B',
+    borderRadius: 8, borderWidth: 1, borderColor: p.border,
+    backgroundColor: p.surface,
   },
-  miniChipActive: { backgroundColor: '#6366F1', borderColor: '#6366F1' },
-  miniChipText: { color: '#64748B', fontSize: 12 },
+  miniChipActive: { backgroundColor: p.primary, borderColor: p.primary },
+  miniChipText: { color: p.textMuted, fontSize: 12 },
   miniChipTextActive: { color: '#fff', fontWeight: '600' },
-  foilToggle: {
-    flexDirection: 'row', alignItems: 'center', gap: 6,
-    backgroundColor: '#1E293B', borderRadius: 8, borderWidth: 1,
-    borderColor: '#334155', paddingHorizontal: 12, paddingVertical: 7,
-    alignSelf: 'flex-start',
-  },
-  foilToggleText: { color: '#64748B', fontSize: 13, fontWeight: '600', flex: 1 },
-  foilToggleTextActive: { color: '#FACC15' },
-  foilToggleDot: { width: 10, height: 10, borderRadius: 5, backgroundColor: '#334155' },
-  foilToggleDotActive: { backgroundColor: '#FACC15' },
 
   emptySearch: { flex: 1, alignItems: 'center', paddingTop: 60, gap: 10 },
-  emptySearchText: { color: '#64748B', fontSize: 14 },
+  emptySearchText: { color: p.textMuted, fontSize: 14 },
 
-  // Confirm step
   cardPreview: { alignItems: 'center', paddingVertical: 24, paddingHorizontal: 32 },
   cardPreviewImg: { width: 200, height: 280, borderRadius: 12 },
-  previewName: { color: '#F1F5F9', fontSize: 20, fontWeight: '800', marginTop: 16, textAlign: 'center' },
-  previewMeta: { color: '#64748B', fontSize: 13, marginTop: 4 },
+  previewName: { color: p.textPrimary, fontSize: 20, fontWeight: '800', marginTop: 16, textAlign: 'center' },
+  previewMeta: { color: p.textMuted, fontSize: 13, marginTop: 4 },
 
-  // Shared form elements
   fieldBlock: { paddingHorizontal: 16, marginBottom: 16 },
-  fieldLabel: { color: '#94A3B8', fontSize: 11, fontWeight: '600', marginBottom: 8, textTransform: 'uppercase' },
+  fieldLabel: { color: p.textSecondary, fontSize: 11, fontWeight: '600', marginBottom: 8, textTransform: 'uppercase' },
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  chip: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8, borderWidth: 1, borderColor: '#334155', backgroundColor: '#1E293B' },
-  chipActive: { backgroundColor: '#6366F1', borderColor: '#6366F1' },
-  chipText: { color: '#64748B', fontSize: 13 },
+  chip: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8, borderWidth: 1, borderColor: p.border, backgroundColor: p.surface },
+  chipActive: { backgroundColor: p.primary, borderColor: p.primary },
+  chipText: { color: p.textMuted, fontSize: 13 },
   chipTextActive: { color: '#fff', fontWeight: '600' },
   rowInputs: { flexDirection: 'row', gap: 12, marginHorizontal: 16, marginBottom: 16 },
-  input: { backgroundColor: '#1E293B', borderWidth: 1, borderColor: '#334155', borderRadius: 10, padding: 12, fontSize: 14, color: '#F1F5F9' },
-  switches: { marginHorizontal: 16, backgroundColor: '#1E293B', borderRadius: 12, borderWidth: 1, borderColor: '#334155', marginBottom: 20 },
-  switchRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 14, borderBottomWidth: 1, borderBottomColor: '#334155' },
+  input: { backgroundColor: p.surface, borderWidth: 1, borderColor: p.border, borderRadius: 10, padding: 12, fontSize: 14, color: p.textPrimary },
+  switches: { marginHorizontal: 16, backgroundColor: p.surface, borderRadius: 12, borderWidth: 1, borderColor: p.border, marginBottom: 20 },
+  switchRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 14, borderBottomWidth: 1, borderBottomColor: p.border },
   switchRowLast: { borderBottomWidth: 0 },
   switchLabelRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  switchLabel: { color: '#F1F5F9', fontSize: 14 },
-  saveBtn: { marginHorizontal: 16, backgroundColor: '#6366F1', borderRadius: 12, padding: 16, alignItems: 'center' },
+  switchLabel: { color: p.textPrimary, fontSize: 14 },
+  saveBtn: { marginHorizontal: 16, backgroundColor: p.primary, borderRadius: 12, padding: 16, alignItems: 'center' },
   saveBtnDisabled: { opacity: 0.5 },
   saveBtnText: { color: '#fff', fontSize: 16, fontWeight: '700' },
-
-  // Folder picker modal
-});
+}));

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
-  View, Text, StyleSheet, TouchableOpacity, ScrollView, ActivityIndicator,
+  View, Text, TouchableOpacity, ScrollView, ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Image } from 'expo-image';
@@ -8,10 +8,12 @@ import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/context/AuthContext';
+import { useTheme } from '@/context/ThemeContext';
 import { usePremium } from '@/lib/usePremium';
 import { effectivePrice, type CardWithCatalog } from '@/lib/cardPrice';
 import { formatCurrencyValue, currencyLabel } from '@/lib/currency';
 import { getUsdToClp } from '@/lib/exchangeRate';
+import { makeStyles } from '@/lib/theme';
 
 type Condition = 'mint' | 'near_mint' | 'excellent' | 'good' | 'played' | 'poor';
 
@@ -46,8 +48,10 @@ const STATS_SELECT =
 export default function StatsScreen() {
   const router = useRouter();
   const { user, profile } = useAuth();
+  const { palette } = useTheme();
   const { isPremium } = usePremium();
   const currency = profile?.currency ?? 'usd';
+  const styles = useStyles();
   const [cards, setCards] = useState<any[]>([]);
   const [setTotals, setSetTotals] = useState<Map<string, number>>(new Map());
   const [loading, setLoading] = useState(true);
@@ -72,7 +76,6 @@ export default function StatsScreen() {
       const rows = (collectionData as any[]) ?? [];
       setCards(rows);
 
-      // Get set totals to compute completion
       const pokemonSetIds = new Set<string>();
       const magicSetIds = new Set<string>();
       for (const r of rows) {
@@ -126,14 +129,12 @@ export default function StatsScreen() {
       }
     }
 
-    // Top valuable cards (by per-card value desc, ignoring qty)
     const top = [...cards]
       .map(c => ({ card: c, value: effectivePrice(c as CardWithCatalog, currency, usdToClp) }))
       .filter(x => x.value > 0)
       .sort((a, b) => b.value - a.value)
       .slice(0, 10);
 
-    // Set completion: top 5 by % completion (with at least 5 cards owned to avoid noise)
     const sets: SetCompletion[] = Array.from(bySet.values())
       .map(s => ({
         setName: s.setName,
@@ -154,14 +155,14 @@ export default function StatsScreen() {
         <Header onBack={() => router.back()} />
         <View style={styles.proGate}>
           <View style={styles.proGateIcon}>
-            <Ionicons name="stats-chart" size={42} color="#FB923C" />
+            <Ionicons name="stats-chart" size={42} color={palette.warningAlt} />
           </View>
           <Text style={styles.proGateTitle}>Stats de colección</Text>
           <Text style={styles.proGateDesc}>
             Con Trocora Pro accedes al valor total, top cartas, completitud por set y distribución por condición.
           </Text>
           <TouchableOpacity style={styles.proGateBtn} onPress={() => router.push('/paywall')}>
-            <Ionicons name="star" size={14} color="#0F172A" />
+            <Ionicons name="star" size={14} color={palette.bg} />
             <Text style={styles.proGateBtnText}>Probar Trocora Pro</Text>
           </TouchableOpacity>
         </View>
@@ -173,7 +174,7 @@ export default function StatsScreen() {
     return (
       <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
         <Header onBack={() => router.back()} />
-        <ActivityIndicator style={{ flex: 1 }} color="#94A3B8" />
+        <ActivityIndicator style={{ flex: 1 }} color={palette.textSecondary} />
       </SafeAreaView>
     );
   }
@@ -203,7 +204,7 @@ export default function StatsScreen() {
                   <View style={styles.topThumb}>
                     {card.image_url
                       ? <Image source={{ uri: card.image_url }} style={{ width: 30, height: 42, borderRadius: 4 }} contentFit="contain" />
-                      : <Ionicons name="card-outline" size={20} color="#64748B" />}
+                      : <Ionicons name="card-outline" size={20} color={palette.textMuted} />}
                   </View>
                   <View style={{ flex: 1 }}>
                     <Text style={styles.topName} numberOfLines={1}>{card.card_name}</Text>
@@ -247,7 +248,7 @@ export default function StatsScreen() {
             <View style={styles.condList}>
               {conditionsList.map(([cond, count]) => (
                 <View key={cond} style={styles.condRow}>
-                  <View style={[styles.condDot, { backgroundColor: CONDITION_COLOR[cond] ?? '#94A3B8' }]} />
+                  <View style={[styles.condDot, { backgroundColor: CONDITION_COLOR[cond] ?? palette.textSecondary }]} />
                   <Text style={styles.condLabel}>{CONDITION_LABEL[cond] ?? cond}</Text>
                   <Text style={styles.condCount}>{count}</Text>
                 </View>
@@ -266,7 +267,7 @@ export default function StatsScreen() {
               </View>
               <View style={styles.foilBarWrap}>
                 <View style={styles.barTrack}>
-                  <View style={[styles.barFill, { width: `${foilPct}%`, backgroundColor: '#FACC15' }]} />
+                  <View style={[styles.barFill, { width: `${foilPct}%`, backgroundColor: palette.warning }]} />
                 </View>
                 <Text style={styles.foilPctText}>{foilPct}% del total</Text>
               </View>
@@ -281,10 +282,12 @@ export default function StatsScreen() {
 }
 
 function Header({ onBack }: { onBack: () => void }) {
+  const styles = useStyles();
+  const { palette } = useTheme();
   return (
     <View style={styles.header}>
       <TouchableOpacity onPress={onBack} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
-        <Ionicons name="chevron-back" size={24} color="#6366F1" />
+        <Ionicons name="chevron-back" size={24} color={palette.primary} />
       </TouchableOpacity>
       <Text style={styles.headerTitle}>Stats de colección</Text>
       <View style={{ width: 24 }} />
@@ -292,85 +295,85 @@ function Header({ onBack }: { onBack: () => void }) {
   );
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#0F172A' },
+const useStyles = makeStyles((p) => ({
+  container: { flex: 1, backgroundColor: p.bg },
   header: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
     paddingHorizontal: 12, paddingVertical: 12,
-    borderBottomWidth: 1, borderBottomColor: '#1E293B',
+    borderBottomWidth: 1, borderBottomColor: p.surface,
   },
-  headerTitle: { color: '#F1F5F9', fontSize: 17, fontWeight: '700' },
+  headerTitle: { color: p.textPrimary, fontSize: 17, fontWeight: '700' },
 
   scroll: { padding: 16, gap: 16 },
 
   heroCard: {
-    backgroundColor: '#1E293B', borderRadius: 16,
-    borderWidth: 1, borderColor: '#334155',
+    backgroundColor: p.surface, borderRadius: 16,
+    borderWidth: 1, borderColor: p.border,
     padding: 20, alignItems: 'center',
   },
-  heroLabel: { color: '#64748B', fontSize: 12, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.5 },
-  heroValue: { color: '#4ADE80', fontSize: 32, fontWeight: '800', marginTop: 4 },
-  heroSub: { color: '#94A3B8', fontSize: 13, marginTop: 4 },
+  heroLabel: { color: p.textMuted, fontSize: 12, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.5 },
+  heroValue: { color: p.successAlt, fontSize: 32, fontWeight: '800', marginTop: 4 },
+  heroSub: { color: p.textSecondary, fontSize: 13, marginTop: 4 },
 
   section: { gap: 8 },
-  sectionTitle: { color: '#64748B', fontSize: 12, fontWeight: '600', textTransform: 'uppercase', letterSpacing: 0.5 },
+  sectionTitle: { color: p.textMuted, fontSize: 12, fontWeight: '600', textTransform: 'uppercase', letterSpacing: 0.5 },
 
   topList: {
-    backgroundColor: '#1E293B', borderRadius: 12,
-    borderWidth: 1, borderColor: '#334155', overflow: 'hidden',
+    backgroundColor: p.surface, borderRadius: 12,
+    borderWidth: 1, borderColor: p.border, overflow: 'hidden',
   },
   topRow: {
     flexDirection: 'row', alignItems: 'center', gap: 10,
     paddingHorizontal: 12, paddingVertical: 10,
-    borderBottomWidth: 1, borderBottomColor: '#334155',
+    borderBottomWidth: 1, borderBottomColor: p.border,
   },
-  topRank: { color: '#64748B', fontSize: 12, fontWeight: '700', width: 28 },
+  topRank: { color: p.textMuted, fontSize: 12, fontWeight: '700', width: 28 },
   topThumb: {
     width: 30, height: 42, borderRadius: 4,
-    backgroundColor: '#0F172A', alignItems: 'center', justifyContent: 'center',
+    backgroundColor: p.bg, alignItems: 'center', justifyContent: 'center',
   },
-  topName: { color: '#F1F5F9', fontSize: 13, fontWeight: '600' },
-  topSet: { color: '#64748B', fontSize: 11, marginTop: 1 },
-  topValue: { color: '#4ADE80', fontSize: 13, fontWeight: '700' },
+  topName: { color: p.textPrimary, fontSize: 13, fontWeight: '600' },
+  topSet: { color: p.textMuted, fontSize: 11, marginTop: 1 },
+  topValue: { color: p.successAlt, fontSize: 13, fontWeight: '700' },
 
   setsList: { gap: 12 },
   setRow: {
-    backgroundColor: '#1E293B', borderRadius: 12,
-    borderWidth: 1, borderColor: '#334155',
+    backgroundColor: p.surface, borderRadius: 12,
+    borderWidth: 1, borderColor: p.border,
     padding: 12, gap: 6,
   },
   setHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  setName: { color: '#F1F5F9', fontSize: 13, fontWeight: '700', flex: 1 },
-  setNumbers: { color: '#94A3B8', fontSize: 12, fontWeight: '600' },
-  setPct: { color: '#6366F1', fontSize: 11, fontWeight: '700', alignSelf: 'flex-end' },
+  setName: { color: p.textPrimary, fontSize: 13, fontWeight: '700', flex: 1 },
+  setNumbers: { color: p.textSecondary, fontSize: 12, fontWeight: '600' },
+  setPct: { color: p.primary, fontSize: 11, fontWeight: '700', alignSelf: 'flex-end' },
 
-  barTrack: { height: 8, borderRadius: 4, backgroundColor: '#334155', overflow: 'hidden' },
-  barFill: { height: '100%', backgroundColor: '#6366F1', borderRadius: 4 },
+  barTrack: { height: 8, borderRadius: 4, backgroundColor: p.border, overflow: 'hidden' },
+  barFill: { height: '100%', backgroundColor: p.primary, borderRadius: 4 },
 
   condList: {
-    backgroundColor: '#1E293B', borderRadius: 12,
-    borderWidth: 1, borderColor: '#334155', overflow: 'hidden',
+    backgroundColor: p.surface, borderRadius: 12,
+    borderWidth: 1, borderColor: p.border, overflow: 'hidden',
   },
   condRow: {
     flexDirection: 'row', alignItems: 'center', gap: 10,
     paddingHorizontal: 14, paddingVertical: 12,
-    borderBottomWidth: 1, borderBottomColor: '#334155',
+    borderBottomWidth: 1, borderBottomColor: p.border,
   },
   condDot: { width: 10, height: 10, borderRadius: 5 },
-  condLabel: { color: '#F1F5F9', fontSize: 14, flex: 1 },
-  condCount: { color: '#F1F5F9', fontSize: 14, fontWeight: '700' },
+  condLabel: { color: p.textPrimary, fontSize: 14, flex: 1 },
+  condCount: { color: p.textPrimary, fontSize: 14, fontWeight: '700' },
 
   foilCard: {
-    backgroundColor: '#1E293B', borderRadius: 12,
-    borderWidth: 1, borderColor: '#334155',
+    backgroundColor: p.surface, borderRadius: 12,
+    borderWidth: 1, borderColor: p.border,
     padding: 14,
     flexDirection: 'row', alignItems: 'center', gap: 16,
   },
   foilLeft: { alignItems: 'center', minWidth: 70 },
-  foilCount: { color: '#FACC15', fontSize: 28, fontWeight: '800' },
-  foilCountLabel: { color: '#64748B', fontSize: 10, marginTop: 2 },
+  foilCount: { color: p.warning, fontSize: 28, fontWeight: '800' },
+  foilCountLabel: { color: p.textMuted, fontSize: 10, marginTop: 2 },
   foilBarWrap: { flex: 1, gap: 4 },
-  foilPctText: { color: '#94A3B8', fontSize: 12, textAlign: 'right' },
+  foilPctText: { color: p.textSecondary, fontSize: 12, textAlign: 'right' },
 
   proGate: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 32, gap: 12 },
   proGateIcon: {
@@ -378,13 +381,13 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(251,146,60,0.15)',
     alignItems: 'center', justifyContent: 'center',
   },
-  proGateTitle: { color: '#F1F5F9', fontSize: 22, fontWeight: '800' },
-  proGateDesc: { color: '#94A3B8', fontSize: 14, textAlign: 'center', lineHeight: 20, maxWidth: 320 },
+  proGateTitle: { color: p.textPrimary, fontSize: 22, fontWeight: '800' },
+  proGateDesc: { color: p.textSecondary, fontSize: 14, textAlign: 'center', lineHeight: 20, maxWidth: 320 },
   proGateBtn: {
     flexDirection: 'row', alignItems: 'center', gap: 6,
-    backgroundColor: '#FACC15', borderRadius: 12,
+    backgroundColor: p.warning, borderRadius: 12,
     paddingHorizontal: 16, paddingVertical: 12,
     marginTop: 12,
   },
-  proGateBtnText: { color: '#0F172A', fontSize: 14, fontWeight: '800' },
-});
+  proGateBtnText: { color: p.bg, fontSize: 14, fontWeight: '800' },
+}));

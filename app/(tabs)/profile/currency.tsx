@@ -1,10 +1,12 @@
 import { useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Alert, ScrollView } from 'react-native';
+import { View, Text, TouchableOpacity, Alert, ScrollView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/context/AuthContext';
+import { useTheme } from '@/context/ThemeContext';
+import { makeStyles } from '@/lib/theme';
 import type { Currency } from '@/types/database';
 
 const OPTIONS: { value: Currency; label: string; desc: string }[] = [
@@ -14,7 +16,9 @@ const OPTIONS: { value: Currency; label: string; desc: string }[] = [
 
 export default function CurrencyScreen() {
   const { user, profile, refreshProfile } = useAuth();
+  const { palette } = useTheme();
   const router = useRouter();
+  const styles = useStyles();
   const [saving, setSaving] = useState(false);
   const current: Currency = profile?.currency ?? 'usd';
 
@@ -35,7 +39,7 @@ export default function CurrencyScreen() {
     <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
       <View style={styles.header}>
         <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
-          <Ionicons name="chevron-back" size={20} color="#6366F1" />
+          <Ionicons name="chevron-back" size={20} color={palette.primary} />
           <Text style={styles.back}>Perfil</Text>
         </TouchableOpacity>
         <Text style={styles.title}>Divisa</Text>
@@ -44,7 +48,7 @@ export default function CurrencyScreen() {
 
       <ScrollView contentContainerStyle={styles.scroll}>
         <Text style={styles.intro}>
-          Elegí la moneda en la que querés ver y registrar los precios de tus cartas.
+          Elige la moneda en la que quieres ver y registrar los precios de tus cartas.
         </Text>
 
         {OPTIONS.map(opt => {
@@ -61,7 +65,7 @@ export default function CurrencyScreen() {
                 <Text style={[styles.rowLabel, isOn && styles.rowLabelActive]}>{opt.label}</Text>
                 <Text style={styles.rowDesc}>{opt.desc}</Text>
               </View>
-              {isOn && <Ionicons name="checkmark-circle" size={22} color="#6366F1" />}
+              {isOn && <Ionicons name="checkmark-circle" size={22} color={palette.primary} />}
             </TouchableOpacity>
           );
         })}
@@ -70,25 +74,25 @@ export default function CurrencyScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#0F172A' },
+const useStyles = makeStyles((p) => ({
+  container: { flex: 1, backgroundColor: p.bg },
   header: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    padding: 16, borderBottomWidth: 1, borderBottomColor: '#1E293B',
+    padding: 16, borderBottomWidth: 1, borderBottomColor: p.surface,
   },
   backBtn: { flexDirection: 'row', alignItems: 'center', gap: 2, minWidth: 60 },
-  back: { color: '#6366F1', fontSize: 15 },
-  title: { color: '#F1F5F9', fontSize: 17, fontWeight: '700' },
+  back: { color: p.primary, fontSize: 15 },
+  title: { color: p.textPrimary, fontSize: 17, fontWeight: '700' },
   scroll: { padding: 16, gap: 8 },
-  intro: { color: '#64748B', fontSize: 13, lineHeight: 19, marginBottom: 16 },
+  intro: { color: p.textMuted, fontSize: 13, lineHeight: 19, marginBottom: 16 },
   row: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    backgroundColor: '#1E293B', borderRadius: 12,
-    borderWidth: 1, borderColor: '#334155',
+    backgroundColor: p.surface, borderRadius: 12,
+    borderWidth: 1, borderColor: p.border,
     paddingHorizontal: 16, paddingVertical: 14,
   },
-  rowActive: { borderColor: '#6366F1' },
-  rowLabel: { color: '#94A3B8', fontSize: 15, fontWeight: '700' },
-  rowLabelActive: { color: '#F1F5F9' },
-  rowDesc: { color: '#64748B', fontSize: 12, marginTop: 2 },
-});
+  rowActive: { borderColor: p.primary },
+  rowLabel: { color: p.textSecondary, fontSize: 15, fontWeight: '700' },
+  rowLabelActive: { color: p.textPrimary },
+  rowDesc: { color: p.textMuted, fontSize: 12, marginTop: 2 },
+}));
