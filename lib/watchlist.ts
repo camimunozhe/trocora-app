@@ -1,19 +1,7 @@
 import { supabase } from '@/lib/supabase';
-import type { TCGGame, CardCondition } from '@/types/database';
+import type { CardWatchlist, TCGGame } from '@/types/database';
 
-export type WatchlistEntry = {
-  id: string;
-  user_id: string;
-  pokemon_card_id: string | null;
-  magic_card_id: string | null;
-  card_name: string;
-  set_name: string | null;
-  image_url: string | null;
-  foil_only: boolean;
-  conditions: CardCondition[];
-  match_only_my_regions: boolean;
-  created_at: string;
-};
+export type WatchlistEntry = CardWatchlist;
 
 export type AddWatchlistInput = {
   userId: string;
@@ -25,17 +13,19 @@ export type AddWatchlistInput = {
 };
 
 export async function addToWatchlist(input: AddWatchlistInput): Promise<{ error: string | null }> {
-  const row: any = {
+  const base = {
     user_id: input.userId,
     card_name: input.cardName,
     set_name: input.setName,
     image_url: input.imageUrl,
+    pokemon_card_id: input.game === 'pokemon' ? input.catalogCardId : null,
+    magic_card_id: input.game === 'magic' ? input.catalogCardId : null,
   };
-  if (input.game === 'pokemon') row.pokemon_card_id = input.catalogCardId;
-  else if (input.game === 'magic') row.magic_card_id = input.catalogCardId;
-  else return { error: 'Juego no soportado para watchlist' };
+  if (!base.pokemon_card_id && !base.magic_card_id) {
+    return { error: 'Juego no soportado para watchlist' };
+  }
 
-  const { error } = await supabase.from('card_watchlist').insert(row);
+  const { error } = await supabase.from('card_watchlist').insert(base);
   return { error: error?.message ?? null };
 }
 

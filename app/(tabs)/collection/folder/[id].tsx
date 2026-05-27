@@ -228,7 +228,7 @@ export default function FolderDetailScreen() {
       });
       if (!ok) return;
     }
-    await supabase.from('cards_collection').update({ [field]: newValue }).in('id', ids);
+    await supabase.from('cards_collection').update({ [field]: newValue } as Partial<Omit<CardCollection, 'id' | 'user_id' | 'created_at'>>).in('id', ids);
     setCards(prev => prev.map(c => selectedCards.has(c.id) ? { ...c, [field]: newValue } : c));
     ids.forEach(cardId => patchCollectionCard(cardId, { [field]: newValue }));
     exitSelectionMode();

@@ -32,7 +32,7 @@ export default function WelcomeScreen() {
     {
       useLogo: true,
       title: 'Bienvenido a Trocora',
-      desc: 'La forma simple de intercambiar y vender cartas de TCG con coleccionistas cerca tuyo.',
+      desc: 'La forma simple de intercambiar y vender cartas de TCG con coleccionistas cerca de ti.',
     },
     {
       iconName: 'pricetag-outline',
@@ -49,7 +49,7 @@ export default function WelcomeScreen() {
     {
       iconName: 'people-outline',
       iconColor: palette.warningAlt,
-      title: 'Conecta cerca tuyo',
+      title: 'Conecta cerca de ti',
       desc: 'Solo verás coleccionistas en las regiones que elijas. Vamos a configurarlas en un momento.',
     },
   ];

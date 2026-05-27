@@ -6,7 +6,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '@/context/AuthContext';
 import { useTheme } from '@/context/ThemeContext';
 import { makeStyles } from '@/lib/theme';
-import { usePendingMeetupsCount } from '@/lib/usePendingMeetupsCount';
+import { useInboxCount } from '@/lib/useInboxCount';
 
 type IoniconName = React.ComponentProps<typeof Ionicons>['name'];
 
@@ -50,7 +50,7 @@ export default function TabsLayout() {
   const { user } = useAuth();
   const { palette } = useTheme();
   const insets = useSafeAreaInsets();
-  const pendingCount = usePendingMeetupsCount(user?.id);
+  const pendingCount = useInboxCount(user?.id);
 
   const tabBarHeight = 56;
   const tabBarBottom = insets.bottom > 0 ? insets.bottom : 12;
@@ -105,7 +105,7 @@ export default function TabsLayout() {
         name="encuentros"
         options={{
           tabBarIcon: ({ focused }) => (
-            <TabIcon focused={focused} icon={focused ? 'swap-horizontal' : 'swap-horizontal-outline'} badge={pendingCount} />
+            <TabIcon focused={focused} icon={focused ? 'chatbubbles' : 'chatbubbles-outline'} badge={pendingCount} />
           ),
         }}
       />

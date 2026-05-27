@@ -132,7 +132,7 @@ export default function ExploreScreen() {
     if (!user) return;
     const { data } = await supabase
       .from('cards_collection')
-      .select('*, profiles!inner(username, avatar_url, regions, created_at, premium_status)')
+      .select('*, profiles!cards_collection_user_id_fkey!inner(username, avatar_url, regions, created_at, premium_status)')
       .eq('is_published', true)
       .neq('user_id', user.id)
       .order('created_at', { ascending: false });

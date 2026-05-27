@@ -45,6 +45,17 @@ type SetCompletion = {
 const STATS_SELECT =
   'id, game, card_name, set_name, card_number, quantity, condition, is_foil, price_reference, price_reference_currency, image_url, pokemon_card_id, magic_card_id, pokemon_cards(set_id, tcgplayer_normal_market, tcgplayer_foil_market), magic_cards(set_id, tcgplayer_normal_market, tcgplayer_foil_market)';
 
+type StatsCatalogRef = {
+  set_id: string | null;
+  tcgplayer_normal_market: number | null;
+  tcgplayer_foil_market: number | null;
+} | null;
+
+type StatsCardRow = CardWithCatalog & {
+  pokemon_cards?: StatsCatalogRef;
+  magic_cards?: StatsCatalogRef;
+};
+
 export default function StatsScreen() {
   const router = useRouter();
   const { user, profile } = useAuth();
@@ -52,7 +63,7 @@ export default function StatsScreen() {
   const { isPremium } = usePremium();
   const currency = profile?.currency ?? 'usd';
   const styles = useStyles();
-  const [cards, setCards] = useState<any[]>([]);
+  const [cards, setCards] = useState<StatsCardRow[]>([]);
   const [setTotals, setSetTotals] = useState<Map<string, number>>(new Map());
   const [loading, setLoading] = useState(true);
   const [usdToClp, setUsdToClp] = useState(950);
@@ -72,8 +83,9 @@ export default function StatsScreen() {
       const { data: collectionData } = await supabase
         .from('cards_collection')
         .select(STATS_SELECT)
-        .eq('user_id', user.id);
-      const rows = (collectionData as any[]) ?? [];
+        .eq('user_id', user.id)
+        .returns<StatsCardRow[]>();
+      const rows = collectionData ?? [];
       setCards(rows);
 
       const pokemonSetIds = new Set<string>();
@@ -90,14 +102,14 @@ export default function StatsScreen() {
           .from('pokemon_sets')
           .select('id, total')
           .in('id', Array.from(pokemonSetIds));
-        ((data as any[]) ?? []).forEach(s => totals.set(`pokemon:${s.id}`, s.total));
+        (data ?? []).forEach(s => totals.set(`pokemon:${s.id}`, s.total));
       }
       if (magicSetIds.size > 0) {
         const { data } = await supabase
           .from('magic_sets')
           .select('id, card_count')
           .in('id', Array.from(magicSetIds));
-        ((data as any[]) ?? []).forEach(s => totals.set(`magic:${s.id}`, s.card_count));
+        (data ?? []).forEach(s => { if (s.card_count != null) totals.set(`magic:${s.id}`, s.card_count); });
       }
       setSetTotals(totals);
       setLoading(false);
@@ -113,10 +125,11 @@ export default function StatsScreen() {
     for (const c of cards) {
       const qty = c.quantity ?? 1;
       totalCount += qty;
-      total += effectivePrice(c as CardWithCatalog, currency, usdToClp) * qty;
+      total += effectivePrice(c, currency, usdToClp) * qty;
       const cond = (c.condition ?? 'mint') as Condition;
       byCondition.set(cond, (byCondition.get(cond) ?? 0) + qty);
       if (c.is_foil) foilCount += qty;
+      if (c.game !== 'pokemon' && c.game !== 'magic') continue;
       const setId = c.game === 'pokemon' ? c.pokemon_cards?.set_id : c.magic_cards?.set_id;
       if (setId && c.set_name) {
         const key = `${c.game}:${setId}`;
@@ -130,7 +143,7 @@ export default function StatsScreen() {
     }
 
     const top = [...cards]
-      .map(c => ({ card: c, value: effectivePrice(c as CardWithCatalog, currency, usdToClp) }))
+      .map(c => ({ card: c, value: effectivePrice(c, currency, usdToClp) }))
       .filter(x => x.value > 0)
       .sort((a, b) => b.value - a.value)
       .slice(0, 10);

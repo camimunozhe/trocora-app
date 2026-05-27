@@ -49,10 +49,10 @@ export function limitReachedMessage(
     activeTrades: 'Límite de intercambios activos',
   };
   const messages: Record<typeof feature, string> = {
-    folders: `Tu plan Free permite ${limit} carpetas (tienes ${current}). Pasate a Trocora Pro para crear las que quieras.`,
+    folders: `Tu plan Free permite ${limit} carpetas (tienes ${current}). Pásate a Trocora Pro para crear las que quieras.`,
     regions: `Tu plan Free permite ${limit} región (tienes ${current} marcadas). Trocora Pro te deja seleccionar todas.`,
-    publishedCards: `Tu plan Free permite ${limit} cartas publicadas (tienes ${current}). Despublicá algunas o pasate a Trocora Pro para publicar las que quieras.`,
-    activeTrades: `Tu plan Free permite ${limit} intercambios activos (tienes ${current}). Cerrá alguno o pasate a Trocora Pro para tener ilimitados.`,
+    publishedCards: `Tu plan Free permite ${limit} cartas publicadas (tienes ${current}). Despublica algunas o pásate a Trocora Pro para publicar las que quieras.`,
+    activeTrades: `Tu plan Free permite ${limit} intercambios activos (tienes ${current}). Cierra alguno o pásate a Trocora Pro para tener ilimitados.`,
   };
   return { title: titles[feature], message: messages[feature] };
 }

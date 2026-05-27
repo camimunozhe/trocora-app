@@ -58,7 +58,7 @@ export default function OnboardingRegionsScreen() {
         <Text style={styles.step}>Paso 2 de 2</Text>
         <Text style={styles.title}>¿Dónde harías intercambios?</Text>
         <Text style={styles.subtitle}>
-          Elige una o más regiones para conectar con coleccionistas cerca tuyo. Puedes cambiarlo cuando quieras desde Configuración.
+          Elige una o más regiones para conectar con coleccionistas cerca de ti. Puedes cambiarlo cuando quieras desde Configuración.
         </Text>
 
         <View style={styles.list}>

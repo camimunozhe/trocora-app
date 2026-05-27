@@ -12,7 +12,7 @@ import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/context/AuthContext';
 import { useTheme } from '@/context/ThemeContext';
 import { resolveEnabledGames } from '@/lib/enabledGames';
-import type { Meetup, CardCollection, CollectionFolder, Message, TCGGame } from '@/types/database';
+import type { Meetup, MeetupStatus, CardCollection, CollectionFolder, Message, TCGGame } from '@/types/database';
 import { FolderIcon } from '@/lib/folderIcon';
 import { ProBadge } from '@/lib/ProBadge';
 import { makeStyles, type Palette } from '@/lib/theme';
@@ -115,7 +115,7 @@ export default function EncuentroDetailScreen() {
     const [meetupRes, cardsRes, messagesRes, ratingRes] = await Promise.all([
       supabase
         .from('meetups')
-        .select('*, proposer:proposer_id(username, avatar_url, created_at, premium_status), receiver:receiver_id(username, avatar_url, created_at, premium_status)')
+        .select('*, proposer:profiles!meetups_proposer_id_fkey(username, avatar_url, created_at, premium_status), receiver:profiles!meetups_receiver_id_fkey(username, avatar_url, created_at, premium_status)')
         .eq('id', id)
         .single(),
       supabase
@@ -159,6 +159,19 @@ export default function EncuentroDetailScreen() {
     return () => clearTimeout(t);
   }, [loading]);
 
+  const markAsRead = useCallback(async () => {
+    if (!user || !meetup) return;
+    const field = meetup.proposer_id === user.id ? 'proposer_last_read_at' : 'receiver_last_read_at';
+    await supabase
+      .from('meetups')
+      .update({ [field]: new Date().toISOString() } as Partial<Omit<Meetup, 'id' | 'created_at'>>)
+      .eq('id', meetup.id);
+  }, [user, meetup]);
+
+  useEffect(() => {
+    if (meetup) markAsRead();
+  }, [meetup?.id, markAsRead]);
+
   useEffect(() => {
     if (!id) return;
     const channel = supabase
@@ -169,11 +182,12 @@ export default function EncuentroDetailScreen() {
         (payload) => {
           const newMsg = payload.new as Message;
           setMessages(prev => prev.some(m => m.id === newMsg.id) ? prev : [...prev, newMsg]);
+          if (user && newMsg.sender_id !== user.id) markAsRead();
         },
       )
       .subscribe();
     return () => { supabase.removeChannel(channel); };
-  }, [id]);
+  }, [id, user, markAsRead]);
 
   if (loading) return <ActivityIndicator style={{ flex: 1, backgroundColor: palette.bg }} color={palette.textSecondary} />;
   if (!meetup) {
@@ -293,21 +307,21 @@ export default function EncuentroDetailScreen() {
     setSaving(false);
   }
 
-  async function updateStatus(newStatus: string) {
+  async function updateStatus(newStatus: MeetupStatus) {
     setSaving(true);
     await supabase.from('meetups').update({
       status: newStatus,
       last_modified_by: user?.id,
       updated_at: new Date().toISOString(),
     }).eq('id', id);
-    setMeetup(m => m ? { ...m, status: newStatus as any } : m);
+    setMeetup(m => m ? { ...m, status: newStatus } : m);
     setSaving(false);
   }
 
   async function checkIn() {
     setSaving(true);
     const field = isProposer ? 'proposer_checked_in' : 'receiver_checked_in';
-    await supabase.from('meetups').update({ [field]: true }).eq('id', id);
+    await supabase.from('meetups').update({ [field]: true } as Partial<Omit<Meetup, 'id' | 'created_at'>>).eq('id', id);
 
     const { data: updated } = await supabase
       .from('meetups')
@@ -750,7 +764,7 @@ function FoldersGrid({ cards, folders, selectedIds, onToggle, meetupGame }: {
       {groups.map(({ key, folder, cards }) => {
         const isCollapsed = collapsed.has(key);
         const selectedInFolder = cards.filter(c => selectedIds.has(c.id)).length;
-        const folderGame: TCGGame | null = folder?.game ?? meetupGame;
+        const folderGame: TCGGame | null = meetupGame;
         return (
           <View key={key}>
             <TouchableOpacity

@@ -6,69 +6,204 @@ export type CardCondition = 'mint' | 'near_mint' | 'excellent' | 'good' | 'playe
 export type CardLanguage = 'en' | 'es' | 'jp' | 'pt' | 'fr' | 'de' | 'it' | 'ko' | 'other';
 export type TCGGame = 'pokemon' | 'magic' | 'yugioh' | 'onepiece' | 'digimon' | 'lorcana' | 'other';
 
-export interface Database {
+export type Json =
+  | string
+  | number
+  | boolean
+  | null
+  | { [key: string]: Json | undefined }
+  | Json[];
+
+export type Database = {
+  __InternalSupabase: {
+    PostgrestVersion: '14.5';
+  };
   public: {
     Tables: {
       profiles: {
         Row: Profile;
-        Insert: Omit<Profile, 'created_at' | 'updated_at'>;
+        Insert: Partial<Profile> & Pick<Profile, 'id' | 'username'>;
         Update: Partial<Omit<Profile, 'id' | 'created_at'>>;
+        Relationships: [];
       };
       cards_collection: {
         Row: CardCollection;
-        Insert: Omit<CardCollection, 'id' | 'created_at'>;
+        Insert: Partial<CardCollection> & Pick<CardCollection, 'user_id' | 'game' | 'card_name'>;
         Update: Partial<Omit<CardCollection, 'id' | 'user_id' | 'created_at'>>;
+        Relationships: [
+          {
+            foreignKeyName: 'cards_collection_folder_id_fkey';
+            columns: ['folder_id'];
+            isOneToOne: false;
+            referencedRelation: 'collection_folders';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'cards_collection_magic_card_id_fkey';
+            columns: ['magic_card_id'];
+            isOneToOne: false;
+            referencedRelation: 'magic_cards';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'cards_collection_pokemon_card_id_fkey';
+            columns: ['pokemon_card_id'];
+            isOneToOne: false;
+            referencedRelation: 'pokemon_cards';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'cards_collection_user_id_fkey';
+            columns: ['user_id'];
+            isOneToOne: false;
+            referencedRelation: 'profiles';
+            referencedColumns: ['id'];
+          },
+        ];
       };
       collection_folders: {
         Row: CollectionFolder;
-        Insert: Omit<CollectionFolder, 'id' | 'created_at'>;
+        Insert: Partial<CollectionFolder> & Pick<CollectionFolder, 'user_id' | 'name'>;
         Update: Partial<Omit<CollectionFolder, 'id' | 'user_id' | 'created_at'>>;
+        Relationships: [];
       };
       meetups: {
         Row: Meetup;
-        Insert: Omit<Meetup, 'id' | 'created_at' | 'updated_at'>;
+        Insert: Partial<Meetup> & Pick<Meetup, 'proposer_id' | 'receiver_id' | 'type'>;
         Update: Partial<Omit<Meetup, 'id' | 'created_at'>>;
+        Relationships: [
+          {
+            foreignKeyName: 'meetups_last_modified_by_fkey';
+            columns: ['last_modified_by'];
+            isOneToOne: false;
+            referencedRelation: 'profiles';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'meetups_proposer_id_fkey';
+            columns: ['proposer_id'];
+            isOneToOne: false;
+            referencedRelation: 'profiles';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'meetups_receiver_id_fkey';
+            columns: ['receiver_id'];
+            isOneToOne: false;
+            referencedRelation: 'profiles';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'meetups_safe_zone_id_fkey';
+            columns: ['safe_zone_id'];
+            isOneToOne: false;
+            referencedRelation: 'safe_zones';
+            referencedColumns: ['id'];
+          },
+        ];
       };
       safe_zones: {
         Row: SafeZone;
-        Insert: Omit<SafeZone, 'id' | 'created_at'>;
+        Insert: Partial<SafeZone> & Pick<SafeZone, 'name' | 'address' | 'latitude' | 'longitude' | 'type' | 'country' | 'city'>;
         Update: Partial<Omit<SafeZone, 'id' | 'created_at'>>;
+        Relationships: [];
       };
       meetup_cards: {
         Row: MeetupCard;
-        Insert: Omit<MeetupCard, 'id' | 'created_at'>;
+        Insert: Partial<MeetupCard> & Pick<MeetupCard, 'meetup_id' | 'card_id' | 'side'>;
         Update: Partial<Omit<MeetupCard, 'id' | 'created_at'>>;
+        Relationships: [];
       };
       meetup_ratings: {
         Row: MeetupRating;
-        Insert: Omit<MeetupRating, 'id' | 'created_at'>;
+        Insert: Partial<MeetupRating> & Pick<MeetupRating, 'meetup_id' | 'rater_id' | 'rated_id' | 'rating'>;
         Update: Partial<Omit<MeetupRating, 'id' | 'created_at'>>;
+        Relationships: [];
       };
       messages: {
         Row: Message;
-        Insert: Omit<Message, 'id' | 'created_at'>;
+        Insert: Partial<Message> & Pick<Message, 'meetup_id' | 'sender_id' | 'body'>;
         Update: Partial<Omit<Message, 'id' | 'meetup_id' | 'sender_id' | 'created_at'>>;
+        Relationships: [];
       };
       push_tokens: {
         Row: PushToken;
-        Insert: Omit<PushToken, 'id' | 'created_at' | 'updated_at'>;
+        Insert: Partial<PushToken> & Pick<PushToken, 'user_id' | 'token' | 'platform'>;
         Update: Partial<Omit<PushToken, 'id' | 'user_id' | 'created_at'>>;
+        Relationships: [];
       };
       magic_sets: {
         Row: MagicSet;
-        Insert: Omit<MagicSet, 'created_at'>;
+        Insert: Partial<MagicSet> & Pick<MagicSet, 'id' | 'name'>;
         Update: Partial<Omit<MagicSet, 'id' | 'created_at'>>;
+        Relationships: [];
       };
       magic_cards: {
         Row: MagicCard;
-        Insert: Omit<MagicCard, 'created_at'>;
+        Insert: Partial<MagicCard> & Pick<MagicCard, 'id' | 'name' | 'set_name'>;
         Update: Partial<Omit<MagicCard, 'id' | 'created_at'>>;
+        Relationships: [];
+      };
+      pokemon_sets: {
+        Row: PokemonSet;
+        Insert: Partial<PokemonSet> & Pick<PokemonSet, 'id' | 'name' | 'series' | 'total' | 'printed_total' | 'release_date'>;
+        Update: Partial<Omit<PokemonSet, 'id' | 'created_at'>>;
+        Relationships: [];
+      };
+      pokemon_cards: {
+        Row: PokemonCard;
+        Insert: Partial<PokemonCard> & Pick<PokemonCard, 'id' | 'name' | 'set_id' | 'set_name' | 'number'>;
+        Update: Partial<Omit<PokemonCard, 'id' | 'created_at'>>;
+        Relationships: [];
+      };
+      pokemon_card_price_history: {
+        Row: PokemonCardPriceHistory;
+        Insert: Partial<PokemonCardPriceHistory> & Pick<PokemonCardPriceHistory, 'card_id'>;
+        Update: Partial<Omit<PokemonCardPriceHistory, 'id' | 'created_at'>>;
+        Relationships: [];
+      };
+      card_watchlist: {
+        Row: CardWatchlist;
+        Insert: Partial<CardWatchlist> & Pick<CardWatchlist, 'user_id' | 'card_name'>;
+        Update: Partial<Omit<CardWatchlist, 'id' | 'user_id' | 'created_at'>>;
+        Relationships: [];
       };
     };
+    Views: {
+      user_reputation: {
+        Row: {
+          user_id: string | null;
+          positive_count: number | null;
+          negative_count: number | null;
+          total_ratings: number | null;
+        };
+        Relationships: [];
+      };
+    };
+    Functions: {
+      transfer_trade_cards: {
+        Args: { p_meetup_id: string };
+        Returns: undefined;
+      };
+      batch_update_pokemon_prices: {
+        Args: { updates: Json };
+        Returns: undefined;
+      };
+      get_inbox_count: {
+        Args: { p_user_id: string };
+        Returns: number;
+      };
+      get_my_meetup_unread_counts: {
+        Args: { p_user_id: string };
+        Returns: { meetup_id: string; unread_count: number }[];
+      };
+    };
+    Enums: { [_ in never]: never };
+    CompositeTypes: { [_ in never]: never };
   };
-}
+};
 
-export interface Profile {
+export type Profile = {
   id: string;
   username: string;
   full_name: string | null;
@@ -92,7 +227,7 @@ export interface Profile {
   updated_at: string;
 }
 
-export interface CardCollection {
+export type CardCollection = {
   id: string;
   user_id: string;
   game: TCGGame;
@@ -118,7 +253,7 @@ export interface CardCollection {
   created_at: string;
 }
 
-export interface MagicSet {
+export type MagicSet = {
   id: string;
   name: string;
   set_type: string | null;
@@ -128,7 +263,7 @@ export interface MagicSet {
   created_at: string;
 }
 
-export interface MagicCard {
+export type MagicCard = {
   id: string;
   name: string;
   set_id: string | null;
@@ -152,7 +287,7 @@ export interface MagicCard {
   created_at: string;
 }
 
-export interface CollectionFolder {
+export type CollectionFolder = {
   id: string;
   user_id: string;
   name: string;
@@ -160,7 +295,7 @@ export interface CollectionFolder {
   created_at: string;
 }
 
-export interface Meetup {
+export type Meetup = {
   id: string;
   proposer_id: string;
   receiver_id: string;
@@ -177,12 +312,14 @@ export interface Meetup {
   last_modified_by: string | null;
   proposer_checked_in: boolean;
   receiver_checked_in: boolean;
+  proposer_last_read_at: string | null;
+  receiver_last_read_at: string | null;
   completed_at: string | null;
   created_at: string;
   updated_at: string;
 }
 
-export interface MeetupCard {
+export type MeetupCard = {
   id: string;
   meetup_id: string;
   card_id: string;
@@ -190,7 +327,7 @@ export interface MeetupCard {
   created_at: string;
 }
 
-export interface SafeZone {
+export type SafeZone = {
   id: string;
   name: string;
   address: string;
@@ -203,7 +340,7 @@ export interface SafeZone {
   created_at: string;
 }
 
-export interface MeetupRating {
+export type MeetupRating = {
   id: string;
   meetup_id: string;
   rater_id: string;
@@ -213,7 +350,7 @@ export interface MeetupRating {
   created_at: string;
 }
 
-export interface Message {
+export type Message = {
   id: string;
   meetup_id: string;
   sender_id: string;
@@ -221,11 +358,69 @@ export interface Message {
   created_at: string;
 }
 
-export interface PushToken {
+export type PushToken = {
   id: string;
   user_id: string;
   token: string;
   platform: 'ios' | 'android';
   created_at: string;
   updated_at: string;
+}
+
+export type PokemonSet = {
+  id: string;
+  name: string;
+  series: string;
+  total: number;
+  printed_total: number;
+  release_date: string;
+  logo_url: string | null;
+  symbol_url: string | null;
+  created_at: string | null;
+}
+
+export type PokemonCard = {
+  id: string;
+  name: string;
+  set_id: string;
+  set_name: string;
+  number: string;
+  rarity: string | null;
+  supertype: string | null;
+  subtypes: string[] | null;
+  types: string[] | null;
+  hp: string | null;
+  image_url: string | null;
+  image_url_large: string | null;
+  tcgplayer_normal_market: number | null;
+  tcgplayer_normal_low: number | null;
+  tcgplayer_foil_market: number | null;
+  tcgplayer_foil_low: number | null;
+  price_updated_at: string | null;
+  created_at: string;
+}
+
+export type PokemonCardPriceHistory = {
+  id: number;
+  card_id: string;
+  date: string;
+  normal_market: number | null;
+  normal_low: number | null;
+  foil_market: number | null;
+  foil_low: number | null;
+  created_at: string;
+}
+
+export type CardWatchlist = {
+  id: string;
+  user_id: string;
+  pokemon_card_id: string | null;
+  magic_card_id: string | null;
+  card_name: string;
+  set_name: string | null;
+  image_url: string | null;
+  foil_only: boolean;
+  conditions: CardCondition[];
+  match_only_my_regions: boolean;
+  created_at: string;
 }

@@ -29,19 +29,19 @@ type PkmSet = {
   series: string;
   total: number;
   release_date: string;
-  symbol_url: string;
-  logo_url: string;
+  symbol_url: string | null;
+  logo_url: string | null;
 };
 
 type PkmCard = {
   id: string;
   name: string;
   number: string;
-  set_id: string;
+  set_id: string | null;
   set_name: string;
-  image_url: string;
-  image_url_large: string;
-  supertype?: string;
+  image_url: string | null;
+  image_url_large: string | null;
+  supertype?: string | null;
   tcgplayer_normal_market?: number | null;
   tcgplayer_foil_market?: number | null;
 };
@@ -448,7 +448,7 @@ function PokemonSetsStep({ onSelect }: { onSelect: (id: string, name: string) =>
         keyExtractor={s => s.id}
         renderItem={({ item }) => (
           <TouchableOpacity style={styles.setRow} onPress={() => onSelect(item.id, item.name)}>
-            <Image source={{ uri: item.symbol_url }} style={styles.setSymbol} contentFit="contain" />
+            <Image source={{ uri: item.symbol_url ?? undefined }} style={styles.setSymbol} contentFit="contain" />
             <View style={{ flex: 1 }}>
               <Text style={styles.setName}>{item.name}</Text>
               <Text style={styles.setMeta}>{item.series} · {item.total} cartas</Text>
@@ -677,7 +677,7 @@ function CardsInSetStep({ setId, game, userId, onSave, onCtxChange, resolveFolde
               onPress={() => setPreviewCard(item)}
               activeOpacity={0.7}
             >
-              <Image source={{ uri: item.image_url }} style={styles.thumbImg} contentFit="contain" />
+              <Image source={{ uri: item.image_url ?? undefined }} style={styles.thumbImg} contentFit="contain" />
               <View style={styles.thumbFooter}>
                 <Text style={styles.thumbNum}>#{item.number}</Text>
                 <Text style={styles.thumbName} numberOfLines={1}>{item.name}</Text>
@@ -862,7 +862,7 @@ function SearchNameStep({ game, userId, onSave, onCtxChange, resolveFolderId, cu
                 onPress={() => setPreviewCard(item)}
                 activeOpacity={0.7}
               >
-                <Image source={{ uri: item.image_url }} style={styles.thumbImg} contentFit="contain" />
+                <Image source={{ uri: item.image_url ?? undefined }} style={styles.thumbImg} contentFit="contain" />
                 <View style={styles.thumbFooter}>
                   <Text style={styles.thumbNum}>#{item.number}</Text>
                   <Text style={styles.thumbName} numberOfLines={1}>{item.name}</Text>
@@ -955,7 +955,7 @@ function CardPreviewModal({ card, onClose, onAdd, qty, currency, usdToClp }: {
       <Pressable style={styles.previewBackdrop} onPress={onClose}>
         <Pressable style={styles.previewCardBox} onPress={() => {}}>
           <Image
-            source={{ uri: card.image_url_large || card.image_url }}
+            source={{ uri: (card.image_url_large || card.image_url) ?? undefined }}
             style={styles.previewImageLarge}
             contentFit="contain"
           />
@@ -1018,7 +1018,7 @@ function ConfirmStep({ game, card, userId, onSave, resolveFolderId, currency, us
   return (
     <ScrollView style={styles.scroll} keyboardShouldPersistTaps="handled">
       <View style={styles.cardPreview}>
-        <Image source={{ uri: card.image_url_large ?? card.image_url }} style={styles.cardPreviewImg} contentFit="contain" />
+        <Image source={{ uri: (card.image_url_large ?? card.image_url) ?? undefined }} style={styles.cardPreviewImg} contentFit="contain" />
         <Text style={styles.previewName}>{card.name}</Text>
         <Text style={styles.previewMeta}>{card.set_name} · #{card.number}</Text>
       </View>

@@ -1,4 +1,4 @@
-import { useCallback, useState, useRef } from 'react';
+import { useCallback, useEffect, useState, useRef } from 'react';
 import { useFocusEffect, useRouter } from 'expo-router';
 import {
   View, Text, FlatList, TouchableOpacity,
@@ -24,18 +24,24 @@ export default function EncuentrosScreen() {
   const router = useRouter();
   const styles = useStyles();
   const [meetups, setMeetups] = useState<MeetupWithProfiles[]>([]);
+  const [unreadByMeetup, setUnreadByMeetup] = useState<Map<string, number>>(new Map());
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const isFirstMount = useRef(true);
 
   const fetchMeetups = useCallback(async () => {
     if (!user) return;
-    const { data } = await supabase
-      .from('meetups')
-      .select('*, proposer:proposer_id(username, avatar_url), receiver:receiver_id(username, avatar_url)')
-      .or(`proposer_id.eq.${user.id},receiver_id.eq.${user.id}`)
-      .order('created_at', { ascending: false });
-    setMeetups((data as MeetupWithProfiles[]) ?? []);
+    const [meetupsRes, unreadRes] = await Promise.all([
+      supabase
+        .from('meetups')
+        .select('*, proposer:profiles!meetups_proposer_id_fkey(username, avatar_url), receiver:profiles!meetups_receiver_id_fkey(username, avatar_url)')
+        .or(`proposer_id.eq.${user.id},receiver_id.eq.${user.id}`)
+        .order('created_at', { ascending: false }),
+      supabase.rpc('get_my_meetup_unread_counts', { p_user_id: user.id }),
+    ]);
+    setMeetups((meetupsRes.data as MeetupWithProfiles[]) ?? []);
+    const rows = (unreadRes.data ?? []) as { meetup_id: string; unread_count: number }[];
+    setUnreadByMeetup(new Map(rows.map(r => [r.meetup_id, r.unread_count])));
   }, [user]);
 
   const handleRefresh = useCallback(async () => {
@@ -54,6 +60,30 @@ export default function EncuentrosScreen() {
     }
   }, [fetchMeetups]));
 
+  useEffect(() => {
+    if (!user) return;
+    const uid = user.id;
+    const channel = supabase
+      .channel(`encuentros-unread-${uid}`)
+      .on(
+        'postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'messages' },
+        () => { fetchMeetups(); },
+      )
+      .on(
+        'postgres_changes',
+        { event: 'UPDATE', schema: 'public', table: 'meetups', filter: `proposer_id=eq.${uid}` },
+        () => { fetchMeetups(); },
+      )
+      .on(
+        'postgres_changes',
+        { event: 'UPDATE', schema: 'public', table: 'meetups', filter: `receiver_id=eq.${uid}` },
+        () => { fetchMeetups(); },
+      )
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, [user, fetchMeetups]);
+
   return (
     <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
       <View style={styles.header}>
@@ -71,6 +101,7 @@ export default function EncuentrosScreen() {
             <MeetupRow
               meetup={item}
               isReceived={item.receiver_id === user?.id}
+              unreadCount={unreadByMeetup.get(item.id) ?? 0}
               onPress={() => router.push({ pathname: '/intercambio/[id]', params: { id: item.id } })}
             />
           )}
@@ -84,9 +115,10 @@ export default function EncuentrosScreen() {
   );
 }
 
-function MeetupRow({ meetup, isReceived, onPress }: {
+function MeetupRow({ meetup, isReceived, unreadCount, onPress }: {
   meetup: MeetupWithProfiles;
   isReceived: boolean;
+  unreadCount: number;
   onPress: () => void;
 }) {
   const styles = useStyles();
@@ -130,7 +162,13 @@ function MeetupRow({ meetup, isReceived, onPress }: {
           <Text style={styles.rowDate}>· {dateStr}</Text>
         </View>
       </View>
-      <Ionicons name="chevron-forward-outline" size={16} color={palette.textMuted} />
+      {unreadCount > 0 ? (
+        <View style={styles.unreadBadge}>
+          <Text style={styles.unreadBadgeText}>{unreadCount > 9 ? '9+' : String(unreadCount)}</Text>
+        </View>
+      ) : (
+        <Ionicons name="chevron-forward-outline" size={16} color={palette.textMuted} />
+      )}
     </TouchableOpacity>
   );
 }
@@ -178,6 +216,14 @@ const useStyles = makeStyles((p) => ({
   rowBottom: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   rowType: { color: p.textSecondary, fontSize: 12 },
   rowDate: { color: p.textMuted, fontSize: 12 },
+
+  unreadBadge: {
+    minWidth: 22, height: 22, borderRadius: 11,
+    paddingHorizontal: 6,
+    backgroundColor: p.danger,
+    alignItems: 'center', justifyContent: 'center',
+  },
+  unreadBadgeText: { color: '#fff', fontSize: 11, fontWeight: '800' },
 
   empty: { alignItems: 'center', paddingTop: 60, paddingHorizontal: 32 },
   emptyTitle: { fontSize: 18, fontWeight: '700', color: p.textPrimary, textAlign: 'center', marginBottom: 8 },

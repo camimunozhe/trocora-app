@@ -44,7 +44,7 @@ export default function WatchlistScreen() {
 
   useFocusEffect(useCallback(() => { load(); }, [user?.id]));
 
-  async function updateEntry(id: string, patch: Partial<WatchlistEntry>) {
+  async function updateEntry(id: string, patch: Partial<Omit<WatchlistEntry, 'id' | 'user_id' | 'created_at'>>) {
     const { error } = await supabase.from('card_watchlist').update(patch).eq('id', id);
     if (error) { dialog.alert({ title: 'Error', message: error.message }); return; }
     setEntries(prev => prev.map(e => e.id === id ? { ...e, ...patch } : e));

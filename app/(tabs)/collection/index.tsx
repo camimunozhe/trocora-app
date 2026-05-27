@@ -377,7 +377,7 @@ export default function CollectionScreen() {
       });
       if (!ok) return;
     }
-    await supabase.from('cards_collection').update({ [field]: newValue }).in('id', ids);
+    await supabase.from('cards_collection').update({ [field]: newValue } as Partial<Omit<CardCollection, 'id' | 'user_id' | 'created_at'>>).in('id', ids);
     setAllUserCards(prev => prev.map(c => selectedCards.has(c.id) ? { ...c, [field]: newValue } : c));
     exitSelectionMode();
   }

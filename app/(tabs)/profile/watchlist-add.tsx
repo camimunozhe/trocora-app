@@ -337,11 +337,11 @@ function CardsInSetStep({
         .select('id, name, collector_number, set_id, set_name, image_url, image_url_large')
         .eq('set_id', setId)
         .then(({ data }) => {
-          const rows = ((data ?? []) as any[]).map(c => ({
+          const rows: CatalogCard[] = (data ?? []).map(c => ({
             id: c.id,
             name: c.name,
             number: c.collector_number ?? '',
-            set_id: c.set_id,
+            set_id: c.set_id ?? '',
             set_name: c.set_name,
             image_url: c.image_url ?? '',
             image_url_large: c.image_url_large ?? c.image_url ?? '',
@@ -355,7 +355,16 @@ function CardsInSetStep({
         .select('id, name, number, set_id, set_name, image_url, image_url_large')
         .eq('set_id', setId)
         .then(({ data }) => {
-          setCards(((data ?? []) as CatalogCard[]));
+          const rows: CatalogCard[] = (data ?? []).map(c => ({
+            id: c.id,
+            name: c.name,
+            number: c.number,
+            set_id: c.set_id,
+            set_name: c.set_name,
+            image_url: c.image_url ?? '',
+            image_url_large: c.image_url_large ?? c.image_url ?? '',
+          }));
+          setCards(rows);
           setLoading(false);
         });
     }
