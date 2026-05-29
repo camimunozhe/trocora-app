@@ -17,13 +17,14 @@ import { assertCanPublish } from '@/lib/publishGate';
 import type { CardCollection, CollectionFolder, TCGGame } from '@/types/database';
 import { formatCurrencyValue, currencyLabel } from '@/lib/currency';
 import { getUsdToClp } from '@/lib/exchangeRate';
-import { availabilityBorder } from '@/lib/cardStyle';
+import { CardPriceTag } from '@/lib/CardPriceTag';
 import { patchCollectionCard, removeCollectionCard, requestCollectionRefresh, subscribeCollection } from '@/lib/collectionRefresh';
 import { validateFolderGame, gameLabel } from '@/lib/folderValidation';
 import { effectivePrice, COLLECTION_CARD_SELECT, type CardWithCatalog } from '@/lib/cardPrice';
 import { FolderIcon } from '@/lib/folderIcon';
 import { UndoSnackbar } from '@/lib/UndoSnackbar';
 import { makeStyles } from '@/lib/theme';
+import { useTabBarClearance } from '@/lib/useTabBarClearance';
 
 type IoniconName = React.ComponentProps<typeof Ionicons>['name'];
 
@@ -50,6 +51,7 @@ export default function FolderDetailScreen() {
   const router = useRouter();
   const dialog = useDialog();
   const styles = useStyles();
+  const tabBarClearance = useTabBarClearance();
 
   const [folder, setFolder] = useState<CollectionFolder | null>(null);
   const [cards, setCards] = useState<CardCollectionWithPrice[]>([]);
@@ -443,7 +445,7 @@ export default function FolderDetailScreen() {
             <Text style={styles.emptyText}>Toca + para agregar cartas</Text>
           </View>
         }
-        contentContainerStyle={sortedCards.length === 0 ? { flex: 1 } : { padding: 8, paddingBottom: selectionMode ? 96 : 24 }}
+        contentContainerStyle={sortedCards.length === 0 ? { flex: 1 } : { padding: 8, paddingBottom: selectionMode ? 96 : tabBarClearance }}
       />
 
       {selectionMode && (
@@ -725,20 +727,23 @@ function CardItem({ card, onPress, onLongPress, selected, selectionMode, currenc
 }) {
   const styles = useStyles();
   const gameIcon = GAME_ICON[card.game];
-  const price = effectivePrice(card, currency, usdToClp);
   return (
-    <TouchableOpacity style={[styles.thumb, availabilityBorder(card), selected && styles.thumbSelected]} onPress={onPress} onLongPress={onLongPress} activeOpacity={0.7}>
-      {card.image_url ? (
-        <Image source={{ uri: card.image_url }} style={styles.thumbImg} contentFit="contain" />
-      ) : (
-        <View style={styles.thumbPlaceholder}>
-          <Ionicons name={gameIcon.name} size={32} color={gameIcon.color} />
-        </View>
-      )}
+    <TouchableOpacity style={[styles.thumb, selected && styles.thumbSelected]} onPress={onPress} onLongPress={onLongPress} activeOpacity={0.7}>
+      <View style={styles.thumbImageWrap}>
+        {card.image_url ? (
+          <Image source={{ uri: card.image_url }} style={styles.thumbImg} contentFit="contain" />
+        ) : (
+          <View style={styles.thumbPlaceholder}>
+            <Ionicons name={gameIcon.name} size={32} color={gameIcon.color} />
+          </View>
+        )}
+        {card.is_published && (
+          <CardPriceTag card={card} currency={currency ?? 'usd'} usdToClp={usdToClp ?? 950} />
+        )}
+      </View>
       <View style={styles.thumbFooter}>
         {card.card_number && <Text style={styles.thumbNum}>#{card.card_number}</Text>}
         <Text style={styles.thumbName} numberOfLines={1}>{card.card_name}</Text>
-        {price > 0 && <Text style={styles.thumbPrice}>{formatCurrencyValue(price, currency)}</Text>}
       </View>
       {card.quantity > 1 && (
         <View style={styles.qtyBadge}>
@@ -834,6 +839,7 @@ const useStyles = makeStyles((p) => ({
     backgroundColor: p.surface, borderRadius: 10, padding: 8,
     borderWidth: 1, borderColor: p.border,
   },
+  thumbImageWrap: { width: '100%', position: 'relative' },
   thumbImg: { width: '100%', aspectRatio: 0.715, borderRadius: 6 },
   thumbPlaceholder: {
     width: '100%', aspectRatio: 0.715, borderRadius: 6,

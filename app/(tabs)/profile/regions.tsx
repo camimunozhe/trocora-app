@@ -7,10 +7,11 @@ import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/context/AuthContext';
 import { useTheme } from '@/context/ThemeContext';
 import { useDialog } from '@/lib/AppDialog';
-import { CHILE_REGIONS } from '@/lib/regions';
+import { regionsForCountry, countryLabel } from '@/lib/regions';
 import { usePremium } from '@/lib/usePremium';
 import { canAddRegion, limitReachedMessage } from '@/lib/planLimits';
 import { makeStyles } from '@/lib/theme';
+import { useTabBarClearance } from '@/lib/useTabBarClearance';
 
 export default function RegionsScreen() {
   const { user, profile, refreshProfile } = useAuth();
@@ -19,6 +20,7 @@ export default function RegionsScreen() {
   const dialog = useDialog();
   const { isPremium } = usePremium();
   const styles = useStyles();
+  const tabBarClearance = useTabBarClearance();
   const [selected, setSelected] = useState<Set<string>>(new Set(profile?.regions ?? []));
   const [saving, setSaving] = useState(false);
 
@@ -74,12 +76,17 @@ export default function RegionsScreen() {
         <View style={{ width: 60 }} />
       </View>
 
-      <ScrollView contentContainerStyle={styles.scroll}>
+      <ScrollView contentContainerStyle={[styles.scroll, { paddingBottom: tabBarClearance }]}>
         <Text style={styles.intro}>
           Regiones donde puedes hacer intercambios. Esto ayuda a conectar con coleccionistas cercanos.
         </Text>
 
-        {CHILE_REGIONS.map(r => {
+        <View style={styles.countryChip}>
+          <Ionicons name="flag-outline" size={15} color={palette.textSecondary} />
+          <Text style={styles.countryChipText}>{countryLabel(profile?.country)}</Text>
+        </View>
+
+        {regionsForCountry(profile?.country).map(r => {
           const isOn = selected.has(r.code);
           return (
             <TouchableOpacity
@@ -110,6 +117,12 @@ const useStyles = makeStyles((p) => ({
   title: { color: p.textPrimary, fontSize: 16, fontWeight: '700' },
   scroll: { padding: 20, gap: 8 },
   intro: { color: p.textSecondary, fontSize: 13, lineHeight: 19, marginBottom: 12 },
+  countryChip: {
+    flexDirection: 'row', alignItems: 'center', gap: 8, alignSelf: 'flex-start',
+    paddingHorizontal: 12, paddingVertical: 8, borderRadius: 10,
+    borderWidth: 1, borderColor: p.border, backgroundColor: p.surface, marginBottom: 12,
+  },
+  countryChipText: { color: p.textPrimary, fontSize: 14, fontWeight: '600' },
   row: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
     padding: 14, borderRadius: 12, borderWidth: 1, borderColor: p.border, backgroundColor: p.surface,

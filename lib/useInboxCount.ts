@@ -15,35 +15,44 @@ export function useInboxCount(userId: string | undefined): number {
 
     const id: string = userId;
     let cancelled = false;
+    let timer: ReturnType<typeof setTimeout> | null = null;
 
     async function refresh() {
       const { data } = await supabase.rpc('get_inbox_count', { p_user_id: id });
       if (!cancelled) setCount((data as number | null) ?? 0);
     }
 
-    refresh();
+    // Coalesce ráfagas de eventos realtime (varios mensajes seguidos) en una
+    // sola RPC en vez de una por evento.
+    function scheduleRefresh() {
+      if (timer) clearTimeout(timer);
+      timer = setTimeout(() => { if (!cancelled) refresh(); }, 250);
+    }
+
+    refresh(); // inicial, inmediato
 
     const channel = supabase
       .channel(`inbox-${id}`)
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'meetups', filter: `receiver_id=eq.${id}` },
-        () => { refresh(); },
+        scheduleRefresh,
       )
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'meetups', filter: `proposer_id=eq.${id}` },
-        () => { refresh(); },
+        scheduleRefresh,
       )
       .on(
         'postgres_changes',
         { event: 'INSERT', schema: 'public', table: 'messages' },
-        () => { refresh(); },
+        scheduleRefresh,
       )
       .subscribe();
 
     return () => {
       cancelled = true;
+      if (timer) clearTimeout(timer);
       supabase.removeChannel(channel);
     };
   }, [userId]);

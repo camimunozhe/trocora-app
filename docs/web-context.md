@@ -86,7 +86,6 @@ Esta lista la sacás de `~/code/trocora-app/app/paywall.tsx` (array `FEATURES`).
 - **Stats de colección**: valor histórico, completitud de sets y top cartas.
 - **Badge Trocora Pro**: mostrale a la comunidad que sos coleccionista serio.
 - **Sin límites**: carpetas, regiones, publicaciones y trades ilimitados.
-- **Exportar colección**: bajá tu colección a CSV o PDF cuando quieras (próximamente).
 
 ---
 

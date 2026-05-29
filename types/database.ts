@@ -168,6 +168,18 @@ export type Database = {
         Update: Partial<Omit<CardWatchlist, 'id' | 'user_id' | 'created_at'>>;
         Relationships: [];
       };
+      user_blocks: {
+        Row: UserBlock;
+        Insert: Partial<UserBlock> & Pick<UserBlock, 'blocker_id' | 'blocked_id'>;
+        Update: Partial<Omit<UserBlock, 'id' | 'created_at'>>;
+        Relationships: [];
+      };
+      user_reports: {
+        Row: UserReport;
+        Insert: Partial<UserReport> & Pick<UserReport, 'reporter_id' | 'reported_user_id' | 'reason'>;
+        Update: Partial<Omit<UserReport, 'id' | 'created_at'>>;
+        Relationships: [];
+      };
     };
     Views: {
       user_reputation: {
@@ -203,6 +215,26 @@ export type Database = {
   };
 };
 
+export type UserBlock = {
+  id: string;
+  blocker_id: string;
+  blocked_id: string;
+  created_at: string;
+};
+
+export type ReportReason = 'spam' | 'scam' | 'inappropriate' | 'harassment' | 'fake' | 'other';
+
+export type UserReport = {
+  id: string;
+  reporter_id: string;
+  reported_user_id: string;
+  meetup_id: string | null;
+  reason: ReportReason;
+  details: string | null;
+  status: string;
+  created_at: string;
+};
+
 export type Profile = {
   id: string;
   username: string;
@@ -216,6 +248,7 @@ export type Profile = {
   currency: Currency;
   enabled_games: TCGGame[];
   regions: string[];
+  country: string;
   onboarding_completed: boolean;
   emergency_contacts: string[] | null;
   premium_status: 'free' | 'active' | 'in_grace' | 'expired';
@@ -237,8 +270,6 @@ export type CardCollection = {
   quantity: number;
   condition: CardCondition;
   is_foil: boolean;
-  is_for_trade: boolean;
-  is_for_sale: boolean;
   is_published: boolean;
   is_boosted: boolean;
   custom_photos: string[];

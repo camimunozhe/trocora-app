@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import {
   View, Text, TouchableOpacity, ScrollView,
-  ActivityIndicator, Alert, Linking, Platform,
+  ActivityIndicator, Linking, Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
@@ -10,6 +10,7 @@ import Purchases, { PurchasesOffering, PurchasesPackage } from 'react-native-pur
 import Constants from 'expo-constants';
 import { useAuth } from '@/context/AuthContext';
 import { useTheme } from '@/context/ThemeContext';
+import { useDialog } from '@/lib/AppDialog';
 import { supabase } from '@/lib/supabase';
 import { usePremium } from '@/lib/usePremium';
 import { makeStyles } from '@/lib/theme';
@@ -28,7 +29,6 @@ const FEATURES: Feature[] = [
   { icon: 'stats-chart', title: 'Stats de colección', desc: 'Valor histórico, completitud de sets y top cartas.', color: '#FB923C' },
   { icon: 'shield-checkmark', title: 'Badge Trocora Pro', desc: 'Muéstrale a la comunidad que eres coleccionista serio.', color: '#22C55E' },
   { icon: 'infinite', title: 'Sin límites', desc: 'Carpetas, regiones, publicaciones y trades ilimitados.', color: '#F472B6' },
-  { icon: 'document-text', title: 'Exportar colección', desc: 'Descarga tu colección a CSV o PDF cuando quieras.', color: '#94A3B8' },
 ];
 
 function annualMonthlyPriceLabel(annual: PurchasesPackage): string | null {
@@ -63,6 +63,7 @@ export default function PaywallScreen() {
   const { refreshProfile, user } = useAuth();
   const { palette } = useTheme();
   const { isPremium, until } = usePremium();
+  const dialog = useDialog();
   const styles = useStyles();
   const [offering, setOffering] = useState<PurchasesOffering | null>(null);
   const [selectedPackage, setSelectedPackage] = useState<PurchasesPackage | null>(null);
@@ -120,12 +121,12 @@ export default function PaywallScreen() {
       const isPro = !!customerInfo.entitlements.active['pro'];
       waitForPremiumActivation();
       if (isPro) {
-        Alert.alert('¡Bienvenido a Trocora Pro!', 'Tu suscripción está activa.');
+        dialog.alert({ title: '¡Bienvenido a Trocora Pro!', message: 'Tu suscripción está activa.' });
       }
       router.back();
     } catch (e: any) {
       if (!e.userCancelled) {
-        Alert.alert('No se pudo procesar', e.message ?? 'Intenta de nuevo en un momento.');
+        dialog.alert({ title: 'No se pudo procesar', message: e.message ?? 'Intenta de nuevo en un momento.' });
       }
     } finally {
       setPurchasing(false);
@@ -138,13 +139,13 @@ export default function PaywallScreen() {
       const info = await Purchases.restorePurchases();
       const isPro = !!info.entitlements.active['pro'];
       waitForPremiumActivation();
-      Alert.alert(
-        isPro ? 'Compras restauradas' : 'Sin compras activas',
-        isPro ? 'Tu Trocora Pro quedó activo.' : 'No encontramos suscripciones activas en esta cuenta.',
-      );
+      dialog.alert({
+        title: isPro ? 'Compras restauradas' : 'Sin compras activas',
+        message: isPro ? 'Tu Trocora Pro quedó activo.' : 'No encontramos suscripciones activas en esta cuenta.',
+      });
       if (isPro) router.back();
     } catch (e: any) {
-      Alert.alert('Error', e.message ?? 'No se pudo restaurar.');
+      dialog.alert({ title: 'Error', message: e.message ?? 'No se pudo restaurar.' });
     } finally {
       setRestoring(false);
     }

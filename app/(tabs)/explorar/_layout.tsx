@@ -1,14 +1,11 @@
 import { Stack } from 'expo-router';
 import { useTheme } from '@/context/ThemeContext';
 
-export default function CollectionLayout() {
+export default function ExplorarLayout() {
   const { palette } = useTheme();
   return (
     <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: palette.bg } }}>
       <Stack.Screen name="index" />
-      <Stack.Screen name="add" />
-      <Stack.Screen name="[id]" />
-      <Stack.Screen name="folder/[id]" />
     </Stack>
   );
 }

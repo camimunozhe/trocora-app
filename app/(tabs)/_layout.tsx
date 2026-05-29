@@ -16,7 +16,7 @@ function TabIcon({ focused, icon, badge }: { focused: boolean; icon: IoniconName
   return (
     <View style={styles.iconWrap}>
       <View style={[styles.iconPill, focused && styles.iconPillActive]}>
-        <Ionicons name={icon} size={26} color={focused ? palette.primary : palette.textSecondary} />
+        <Ionicons name={icon} size={28} color={focused ? palette.primary : palette.textSecondary} />
       </View>
       {badge != null && badge > 0 && (
         <View style={styles.badge}>
@@ -52,9 +52,10 @@ export default function TabsLayout() {
   const insets = useSafeAreaInsets();
   const pendingCount = useInboxCount(user?.id);
 
-  const tabBarHeight = 56;
-  const tabBarBottom = insets.bottom > 0 ? insets.bottom : 12;
-  const sceneBottomPad = tabBarHeight + tabBarBottom + 12;
+  const tabBarHeight = 50;
+  const edgeGap = 24;
+  // Mismo margen visual abajo que a los lados; nunca por debajo de la barra de navegación del sistema.
+  const tabBarBottom = Math.max(edgeGap, insets.bottom - 12);
 
   return (
     <Tabs
@@ -63,13 +64,13 @@ export default function TabsLayout() {
         tabBarShowLabel: false,
         tabBarItemStyle: { paddingTop: 0, paddingBottom: 0, justifyContent: 'center' },
         tabBarIconStyle: { width: '100%', height: '100%', marginTop: 0, marginBottom: 0 },
-        sceneStyle: { backgroundColor: palette.bg, paddingBottom: sceneBottomPad },
+        sceneStyle: { backgroundColor: palette.bg },
         tabBarStyle: {
           position: 'absolute',
           bottom: tabBarBottom,
           left: 0,
           right: 0,
-          marginHorizontal: 32,
+          marginHorizontal: edgeGap,
           height: tabBarHeight,
           backgroundColor: palette.surface,
           borderRadius: tabBarHeight / 2,
@@ -94,7 +95,7 @@ export default function TabsLayout() {
         }}
       />
       <Tabs.Screen
-        name="meetups"
+        name="explorar"
         options={{
           tabBarIcon: ({ focused }) => (
             <TabIcon focused={focused} icon={focused ? 'search' : 'search-outline'} />
@@ -102,7 +103,7 @@ export default function TabsLayout() {
         }}
       />
       <Tabs.Screen
-        name="encuentros"
+        name="intercambios"
         options={{
           tabBarIcon: ({ focused }) => (
             <TabIcon focused={focused} icon={focused ? 'chatbubbles' : 'chatbubbles-outline'} badge={pendingCount} />
@@ -161,7 +162,7 @@ const useStyles = makeStyles((p) => ({
     borderRadius: 16,
     overflow: 'hidden',
     borderWidth: 2,
-    borderColor: 'transparent',
+    borderColor: p.border,
   },
   avatarRingActive: {
     borderColor: p.primary,
@@ -169,6 +170,7 @@ const useStyles = makeStyles((p) => ({
   avatarImg: {
     width: '100%',
     height: '100%',
+    borderRadius: 16,
   },
   avatarFallback: {
     flex: 1,

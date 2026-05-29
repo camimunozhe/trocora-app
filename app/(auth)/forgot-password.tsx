@@ -3,70 +3,73 @@ import {
   View, Text, TextInput, TouchableOpacity, Image,
   KeyboardAvoidingView, Platform, ScrollView,
 } from 'react-native';
-import { Link } from 'expo-router';
+import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '@/lib/supabase';
 import { useTheme } from '@/context/ThemeContext';
 import { makeStyles } from '@/lib/theme';
 import { useDialog } from '@/lib/AppDialog';
 
-export default function RegisterScreen() {
+export default function ForgotPasswordScreen() {
   const { palette } = useTheme();
   const styles = useStyles();
   const dialog = useDialog();
-  const [username, setUsername] = useState('');
+  const router = useRouter();
   const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
   const [code, setCode] = useState('');
-  const [step, setStep] = useState<'form' | 'verify'>('form');
+  const [password, setPassword] = useState('');
+  const [step, setStep] = useState<'email' | 'reset'>('email');
   const [loading, setLoading] = useState(false);
 
-  async function handleRegister() {
-    if (!username || !email || !password) {
-      dialog.alert({ title: 'Error', message: 'Completa todos los campos' });
+  async function handleSendCode() {
+    if (!email.trim()) {
+      dialog.alert({ title: 'Error', message: 'Ingresa tu email' });
+      return;
+    }
+    setLoading(true);
+    const { error } = await supabase.auth.resetPasswordForEmail(email.trim());
+    setLoading(false);
+    if (error) {
+      dialog.alert({ title: 'Error', message: error.message });
+      return;
+    }
+    setStep('reset');
+  }
+
+  async function handleReset() {
+    const token = code.trim();
+    if (token.length !== 6) {
+      dialog.alert({ title: 'Código inválido', message: 'Ingresa el código de 6 dígitos que recibiste por email.' });
       return;
     }
     if (password.length < 6) {
       dialog.alert({ title: 'Error', message: 'La contraseña debe tener al menos 6 caracteres' });
       return;
     }
-
     setLoading(true);
-    const { error } = await supabase.auth.signUp({
-      email: email.trim(),
-      password,
-      options: { data: { username: username.trim() } },
-    });
-    setLoading(false);
-    if (error) {
-      dialog.alert({ title: 'Error', message: error.message });
-      return;
-    }
-    setStep('verify');
-  }
-
-  async function handleVerify() {
-    const token = code.trim();
-    if (token.length !== 6) {
-      dialog.alert({ title: 'Código inválido', message: 'Ingresa el código de 6 dígitos que recibiste por email.' });
-      return;
-    }
-    setLoading(true);
-    const { error } = await supabase.auth.verifyOtp({
+    const { error: otpError } = await supabase.auth.verifyOtp({
       email: email.trim(),
       token,
-      type: 'signup',
+      type: 'recovery',
     });
-    setLoading(false);
-    if (error) {
-      dialog.alert({ title: 'Código incorrecto', message: error.message });
+    if (otpError) {
+      setLoading(false);
+      dialog.alert({ title: 'Código incorrecto', message: otpError.message });
       return;
     }
+    const { error: updateError } = await supabase.auth.updateUser({ password });
+    setLoading(false);
+    if (updateError) {
+      dialog.alert({ title: 'No se pudo actualizar', message: updateError.message });
+      return;
+    }
+    dialog.alert({ title: 'Contraseña actualizada', message: 'Iniciaste sesión con tu nueva contraseña.' });
+    // La sesión ya está activa tras verifyOtp → RootNavigator redirige a la app solo.
   }
 
   async function handleResend() {
     setLoading(true);
-    const { error } = await supabase.auth.resend({ type: 'signup', email: email.trim() });
+    const { error } = await supabase.auth.resetPasswordForEmail(email.trim());
     setLoading(false);
     if (error) dialog.alert({ title: 'Error', message: error.message });
     else dialog.alert({ title: 'Código reenviado', message: 'Revisa tu correo en unos minutos.' });
@@ -80,27 +83,16 @@ export default function RegisterScreen() {
       <ScrollView contentContainerStyle={styles.inner} keyboardShouldPersistTaps="handled">
         <View style={styles.header}>
           <Image source={require('../../assets/icon.png')} style={styles.logo} />
-          <Text style={styles.title}>{step === 'form' ? 'Crear cuenta' : 'Verifica tu email'}</Text>
+          <Text style={styles.title}>{step === 'email' ? 'Recuperar contraseña' : 'Nueva contraseña'}</Text>
           <Text style={styles.subtitle}>
-            {step === 'form'
-              ? 'Únete a la comunidad TCG'
+            {step === 'email'
+              ? 'Te enviaremos un código para restablecerla'
               : `Te enviamos un código de 6 dígitos a ${email}`}
           </Text>
         </View>
 
-        {step === 'form' ? (
+        {step === 'email' ? (
           <View style={styles.form}>
-            <Text style={styles.label}>Nombre de usuario</Text>
-            <TextInput
-              style={styles.input}
-              value={username}
-              onChangeText={setUsername}
-              placeholder="trainer123"
-              placeholderTextColor={palette.textMuted}
-              autoCapitalize="none"
-              autoCorrect={false}
-            />
-
             <Text style={styles.label}>Email</Text>
             <TextInput
               style={styles.input}
@@ -113,30 +105,18 @@ export default function RegisterScreen() {
               autoCorrect={false}
             />
 
-            <Text style={styles.label}>Contraseña</Text>
-            <TextInput
-              style={styles.input}
-              value={password}
-              onChangeText={setPassword}
-              placeholder="Mínimo 6 caracteres"
-              placeholderTextColor={palette.textMuted}
-              secureTextEntry
-            />
-
             <TouchableOpacity
               style={[styles.btn, loading && styles.btnDisabled]}
-              onPress={handleRegister}
+              onPress={handleSendCode}
               disabled={loading}
             >
-              <Text style={styles.btnText}>{loading ? 'Creando cuenta...' : 'Crear cuenta'}</Text>
+              <Text style={styles.btnText}>{loading ? 'Enviando...' : 'Enviar código'}</Text>
             </TouchableOpacity>
 
-            <View style={styles.loginRow}>
-              <Text style={styles.loginText}>¿Ya tienes cuenta? </Text>
-              <Link href="/(auth)/login">
-                <Text style={styles.loginLink}>Inicia sesión</Text>
-              </Link>
-            </View>
+            <TouchableOpacity onPress={() => router.back()} style={styles.backLinkRow}>
+              <Ionicons name="chevron-back" size={14} color={palette.textSecondary} />
+              <Text style={styles.backLink}>Volver a iniciar sesión</Text>
+            </TouchableOpacity>
           </View>
         ) : (
           <View style={styles.form}>
@@ -152,12 +132,22 @@ export default function RegisterScreen() {
               autoFocus
             />
 
+            <Text style={styles.label}>Nueva contraseña</Text>
+            <TextInput
+              style={styles.input}
+              value={password}
+              onChangeText={setPassword}
+              placeholder="Mínimo 6 caracteres"
+              placeholderTextColor={palette.textMuted}
+              secureTextEntry
+            />
+
             <TouchableOpacity
               style={[styles.btn, loading && styles.btnDisabled]}
-              onPress={handleVerify}
+              onPress={handleReset}
               disabled={loading}
             >
-              <Text style={styles.btnText}>{loading ? 'Verificando...' : 'Verificar'}</Text>
+              <Text style={styles.btnText}>{loading ? 'Guardando...' : 'Cambiar contraseña'}</Text>
             </TouchableOpacity>
 
             <View style={styles.resendRow}>
@@ -167,9 +157,9 @@ export default function RegisterScreen() {
               </TouchableOpacity>
             </View>
 
-            <TouchableOpacity onPress={() => setStep('form')} style={styles.backLinkRow}>
+            <TouchableOpacity onPress={() => setStep('email')} style={styles.backLinkRow}>
               <Ionicons name="chevron-back" size={14} color={palette.textSecondary} />
-              <Text style={styles.backLink}>Volver</Text>
+              <Text style={styles.backLink}>Cambiar email</Text>
             </TouchableOpacity>
           </View>
         )}
@@ -214,7 +204,6 @@ const useStyles = makeStyles((p) => ({
   },
   btnDisabled: { opacity: 0.6 },
   btnText: { color: '#fff', fontSize: 16, fontWeight: '700' },
-  loginRow: { flexDirection: 'row', justifyContent: 'center', marginTop: 20 },
   loginText: { color: p.textMuted, fontSize: 14 },
   loginLink: { color: p.primary, fontSize: 14, fontWeight: '600' },
 }));

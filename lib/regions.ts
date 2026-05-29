@@ -1,5 +1,8 @@
-// Regiones de Chile (lanzamiento inicial). Más adelante se puede namespacing
-// por país, p.ej. `CL-RM`, `CL-V`, etc.
+// Regiones por país. Lanzamiento inicial: solo Chile.
+// Para sumar un país: agregarlo a COUNTRIES y sus regiones a REGIONS_BY_COUNTRY.
+export type Region = { code: string; label: string };
+export type Country = { code: string; label: string; flag: string };
+
 export const CHILE_REGIONS = [
   { code: 'AP',   label: 'Arica y Parinacota' },
   { code: 'TA',   label: 'Tarapacá' },
@@ -21,6 +24,24 @@ export const CHILE_REGIONS = [
 
 export type RegionCode = (typeof CHILE_REGIONS)[number]['code'];
 
+export const DEFAULT_COUNTRY = 'CL';
+
+export const COUNTRIES: Country[] = [
+  { code: 'CL', label: 'Chile', flag: '🇨🇱' },
+];
+
+export const REGIONS_BY_COUNTRY: Record<string, readonly Region[]> = {
+  CL: CHILE_REGIONS,
+};
+
+export function regionsForCountry(country: string | null | undefined): readonly Region[] {
+  return REGIONS_BY_COUNTRY[country ?? DEFAULT_COUNTRY] ?? REGIONS_BY_COUNTRY[DEFAULT_COUNTRY];
+}
+
+export function countryLabel(code: string | null | undefined): string {
+  return COUNTRIES.find(c => c.code === (code ?? DEFAULT_COUNTRY))?.label ?? 'Chile';
+}
+
 export const REGION_LABEL: Record<string, string> = Object.fromEntries(
-  CHILE_REGIONS.map(r => [r.code, r.label]),
+  Object.values(REGIONS_BY_COUNTRY).flat().map(r => [r.code, r.label]),
 );

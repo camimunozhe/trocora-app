@@ -13,6 +13,7 @@ import { usePremium } from '@/lib/usePremium';
 import { effectivePrice, type CardWithCatalog } from '@/lib/cardPrice';
 import { formatCurrencyValue, currencyLabel } from '@/lib/currency';
 import { getUsdToClp } from '@/lib/exchangeRate';
+import { useTabBarClearance } from '@/lib/useTabBarClearance';
 import { makeStyles } from '@/lib/theme';
 
 type Condition = 'mint' | 'near_mint' | 'excellent' | 'good' | 'played' | 'poor';
@@ -63,6 +64,7 @@ export default function StatsScreen() {
   const { isPremium } = usePremium();
   const currency = profile?.currency ?? 'usd';
   const styles = useStyles();
+  const tabBarClearance = useTabBarClearance();
   const [cards, setCards] = useState<StatsCardRow[]>([]);
   const [setTotals, setSetTotals] = useState<Map<string, number>>(new Map());
   const [loading, setLoading] = useState(true);
@@ -198,7 +200,7 @@ export default function StatsScreen() {
   return (
     <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
       <Header onBack={() => router.back()} />
-      <ScrollView contentContainerStyle={styles.scroll}>
+      <ScrollView contentContainerStyle={[styles.scroll, { paddingBottom: tabBarClearance }]}>
         <View style={styles.heroCard}>
           <Text style={styles.heroLabel}>Valor estimado</Text>
           <Text style={styles.heroValue}>{formatCurrencyValue(stats.totalValue, currency)}</Text>

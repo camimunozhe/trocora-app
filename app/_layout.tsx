@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Stack, useRouter, useSegments } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { Platform, View } from 'react-native';
+import { Image } from 'expo-image';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import * as Notifications from 'expo-notifications';
 import Constants from 'expo-constants';
@@ -89,6 +90,17 @@ function RootNavigator() {
   }, [pendingMeetupId, loading, session]);
 
   const { palette } = useTheme();
+
+  // Mientras se restaura la sesión/perfil, mostramos el ícono sobre el mismo fondo
+  // del splash nativo para que NO se monte el Stack (evita el flash de login). TROC-23.
+  if (loading) {
+    return (
+      <View style={{ flex: 1, backgroundColor: '#0F172A', justifyContent: 'center', alignItems: 'center' }}>
+        <Image source={require('../assets/splash-icon.png')} style={{ width: 120, height: 120 }} contentFit="contain" />
+      </View>
+    );
+  }
+
   return (
     <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: palette.bg } }}>
       <Stack.Screen name="(auth)" />

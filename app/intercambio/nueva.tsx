@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity,
-  ActivityIndicator, Alert, Dimensions,
+  ActivityIndicator, Dimensions,
   KeyboardAvoidingView, Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -56,7 +56,7 @@ export default function NuevaPropuestaScreen() {
   }, [loadData]);
 
   async function submit() {
-    if (selectedTheir.size === 0) { Alert.alert('Selecciona al menos una carta'); return; }
+    if (selectedTheir.size === 0) { dialog.alert({ title: 'Selecciona al menos una carta' }); return; }
 
     if (!isPremium && user) {
       const { count } = await supabase
@@ -91,7 +91,7 @@ export default function NuevaPropuestaScreen() {
 
     if (error || !meetupData) {
       console.error('[meetups.insert]', error);
-      Alert.alert('Error al crear el intercambio', error?.message ?? 'Error desconocido');
+      dialog.alert({ title: 'Error al crear el intercambio', message: error?.message ?? 'Error desconocido' });
       setSaving(false);
       return;
     }
@@ -103,7 +103,7 @@ export default function NuevaPropuestaScreen() {
     const { error: cardsError } = await supabase.from('meetup_cards').insert(cardInserts);
     if (cardsError) {
       console.error('[meetup_cards.insert]', cardsError);
-      Alert.alert('Intercambio creado pero falló agregar cartas', cardsError.message);
+      dialog.alert({ title: 'Intercambio creado pero falló agregar cartas', message: cardsError.message });
       setSaving(false);
       return;
     }
@@ -133,7 +133,7 @@ export default function NuevaPropuestaScreen() {
   return (
     <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.canGoBack() ? router.back() : router.replace('/(tabs)/meetups')}>
+        <TouchableOpacity onPress={() => router.canGoBack() ? router.back() : router.replace('/(tabs)/explorar')}>
           <Text style={styles.back} numberOfLines={1}>← Volver</Text>
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Nuevo intercambio</Text>

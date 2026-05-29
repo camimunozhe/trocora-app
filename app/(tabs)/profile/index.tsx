@@ -1,9 +1,10 @@
 import { useState, useEffect } from 'react';
 import {
   View, Text, TouchableOpacity,
-  ScrollView, Alert, ActivityIndicator,
+  ScrollView, ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useDialog } from '@/lib/AppDialog';
 import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -13,6 +14,7 @@ import { useAuth } from '@/context/AuthContext';
 import { useTheme } from '@/context/ThemeContext';
 import { ProBadge } from '@/lib/ProBadge';
 import { makeStyles } from '@/lib/theme';
+import { useTabBarClearance } from '@/lib/useTabBarClearance';
 
 type Reputation = { positive_count: number; negative_count: number; total_ratings: number } | null;
 type GameBreakdown = { pokemon: number; magic: number; published: number };
@@ -29,7 +31,9 @@ export default function ProfileScreen() {
   const { user, profile, refreshProfile } = useAuth();
   const { palette } = useTheme();
   const router = useRouter();
+  const dialog = useDialog();
   const styles = useStyles();
+  const tabBarClearance = useTabBarClearance();
   const [reputation, setReputation] = useState<Reputation>(null);
   const [collectionCount, setCollectionCount] = useState(0);
   const [meetupCount, setMeetupCount] = useState(0);
@@ -60,7 +64,7 @@ export default function ProfileScreen() {
   async function pickAvatar() {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (status !== 'granted') {
-      Alert.alert('Permiso requerido', 'Necesitamos acceso a tu galería para cambiar la foto.');
+      dialog.alert({ title: 'Permiso requerido', message: 'Necesitamos acceso a tu galería para cambiar la foto.' });
       return;
     }
 
@@ -104,7 +108,7 @@ export default function ProfileScreen() {
 
       await refreshProfile();
     } catch (e) {
-      Alert.alert('Error', 'No se pudo subir la imagen. Intenta de nuevo.');
+      dialog.alert({ title: 'Error', message: 'No se pudo subir la imagen. Intenta de nuevo.' });
     } finally {
       setUploadingAvatar(false);
     }
@@ -131,7 +135,7 @@ export default function ProfileScreen() {
         </TouchableOpacity>
       </View>
 
-      <ScrollView>
+      <ScrollView contentContainerStyle={{ paddingBottom: tabBarClearance }}>
         <View style={styles.hero}>
           <TouchableOpacity style={styles.avatarWrap} onPress={pickAvatar} disabled={uploadingAvatar} activeOpacity={0.8}>
             {profile?.avatar_url ? (

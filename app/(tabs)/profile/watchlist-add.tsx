@@ -14,6 +14,7 @@ import { usePremium } from '@/lib/usePremium';
 import { useDialog } from '@/lib/AppDialog';
 import { addToWatchlist, isInWatchlist } from '@/lib/watchlist';
 import { resolveEnabledGames } from '@/lib/enabledGames';
+import { useTabBarClearance } from '@/lib/useTabBarClearance';
 import { makeStyles } from '@/lib/theme';
 import type { TCGGame } from '@/types/database';
 
@@ -162,9 +163,10 @@ export default function WatchlistAddScreen() {
 function GameStep({ enabledGames, onSelect }: { enabledGames: TCGGame[]; onSelect: (g: TCGGame) => void }) {
   const styles = useStyles();
   const { palette } = useTheme();
+  const tabBarClearance = useTabBarClearance();
   const visible = GAMES.filter(g => enabledGames.includes(g.value));
   return (
-    <ScrollView contentContainerStyle={styles.scrollPad}>
+    <ScrollView contentContainerStyle={[styles.scrollPad, { paddingBottom: tabBarClearance }]}>
       <Text style={styles.hint}>¿De qué juego es la carta?</Text>
       {visible.map(g => (
         <TouchableOpacity key={g.value} style={styles.bigCard} onPress={() => onSelect(g.value)}>
@@ -183,9 +185,10 @@ function GameStep({ enabledGames, onSelect }: { enabledGames: TCGGame[]; onSelec
 
 function MethodStep({ game, onSet, onName }: { game: TCGGame; onSet: () => void; onName: () => void }) {
   const styles = useStyles();
+  const tabBarClearance = useTabBarClearance();
   const hasNameSearch = game === 'pokemon';
   return (
-    <ScrollView contentContainerStyle={styles.scrollPad}>
+    <ScrollView contentContainerStyle={[styles.scrollPad, { paddingBottom: tabBarClearance }]}>
       <Text style={styles.hint}>¿Cómo quieres buscar?</Text>
       <MethodOption icon="albums-outline" label="Por set" desc="Explora las expansiones" onPress={onSet} />
       {hasNameSearch && (
@@ -219,6 +222,7 @@ function SetsStep({ game, onSelect }: { game: TCGGame; onSelect: (id: string, na
 function PokemonSetsStep({ onSelect }: { onSelect: (id: string, name: string) => void }) {
   const styles = useStyles();
   const { palette } = useTheme();
+  const tabBarClearance = useTabBarClearance();
   const [sets, setSets] = useState<PkmSet[]>([]);
   const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(true);
@@ -258,7 +262,7 @@ function PokemonSetsStep({ onSelect }: { onSelect: (id: string, name: string) =>
             <Ionicons name="chevron-forward" size={16} color={palette.textMuted} />
           </TouchableOpacity>
         )}
-        contentContainerStyle={{ paddingBottom: 20 }}
+        contentContainerStyle={{ paddingBottom: tabBarClearance }}
       />
     </View>
   );
@@ -267,6 +271,7 @@ function PokemonSetsStep({ onSelect }: { onSelect: (id: string, name: string) =>
 function MagicSetsStep({ onSelect }: { onSelect: (id: string, name: string) => void }) {
   const styles = useStyles();
   const { palette } = useTheme();
+  const tabBarClearance = useTabBarClearance();
   const [sets, setSets] = useState<MtgSet[]>([]);
   const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(true);
@@ -311,7 +316,7 @@ function MagicSetsStep({ onSelect }: { onSelect: (id: string, name: string) => v
             <Ionicons name="chevron-forward" size={16} color={palette.textMuted} />
           </TouchableOpacity>
         )}
-        contentContainerStyle={{ paddingBottom: 20 }}
+        contentContainerStyle={{ paddingBottom: tabBarClearance }}
       />
     </View>
   );
@@ -327,6 +332,7 @@ function CardsInSetStep({
 }) {
   const styles = useStyles();
   const { palette } = useTheme();
+  const tabBarClearance = useTabBarClearance();
   const [cards, setCards] = useState<CatalogCard[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -397,7 +403,7 @@ function CardsInSetStep({
           </TouchableOpacity>
         );
       }}
-      contentContainerStyle={{ padding: 8, paddingBottom: 30 }}
+      contentContainerStyle={{ padding: 8, paddingBottom: tabBarClearance }}
     />
   );
 }
@@ -405,6 +411,7 @@ function CardsInSetStep({
 function SearchNameStep({ added, onAdd }: { added: Set<string>; onAdd: (card: CatalogCard) => void }) {
   const styles = useStyles();
   const { palette } = useTheme();
+  const tabBarClearance = useTabBarClearance();
   const [query, setQuery] = useState('');
   const [cards, setCards] = useState<CatalogCard[]>([]);
   const [loading, setLoading] = useState(false);
@@ -474,7 +481,7 @@ function SearchNameStep({ added, onAdd }: { added: Set<string>; onAdd: (card: Ca
               </View>
             )
           }
-          contentContainerStyle={{ padding: 8, paddingBottom: 30 }}
+          contentContainerStyle={{ padding: 8, paddingBottom: tabBarClearance }}
         />
       )}
     </View>

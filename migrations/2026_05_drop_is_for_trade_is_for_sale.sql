@@ -1,7 +1,7 @@
--- Atomic transfer of trade cards between the proposer and receiver of a meetup.
--- Cards with side='receiver' move to the proposer, and vice versa.
--- folder_id is reset since folders belong to the original owner.
--- Run once in Supabase SQL editor.
+-- TROC-15: is_for_trade / is_for_sale eran columnas zombi.
+-- La disponibilidad se unificó en is_published; el modo (trade/venta) se acuerda en el chat (meetups.kind).
+-- Ningún Switch las alternaba y ninguna pantalla filtraba por ellas.
+-- Recreamos transfer_trade_cards sin referenciarlas y luego dropeamos las columnas.
 
 CREATE OR REPLACE FUNCTION transfer_trade_cards(p_meetup_id uuid)
 RETURNS void
@@ -50,3 +50,6 @@ $$;
 
 REVOKE ALL ON FUNCTION transfer_trade_cards(uuid) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION transfer_trade_cards(uuid) TO authenticated;
+
+ALTER TABLE cards_collection DROP COLUMN IF EXISTS is_for_trade;
+ALTER TABLE cards_collection DROP COLUMN IF EXISTS is_for_sale;

@@ -20,6 +20,7 @@ import { formatPrice, currencyLabel } from '@/lib/currency';
 import { resolveEnabledGames } from '@/lib/enabledGames';
 import { validateFolderGame, gameLabel } from '@/lib/folderValidation';
 import { makeStyles } from '@/lib/theme';
+import { useTabBarClearance } from '@/lib/useTabBarClearance';
 
 type IoniconName = React.ComponentProps<typeof Ionicons>['name'];
 
@@ -341,9 +342,10 @@ export default function AddCardScreen() {
 function GameStep({ onSelect, enabledGames }: { onSelect: (g: TCGGame) => void; enabledGames: TCGGame[] }) {
   const styles = useStyles();
   const { palette } = useTheme();
+  const tabBarClearance = useTabBarClearance();
   const visible = GAMES.filter(g => enabledGames.includes(g.value));
   return (
-    <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollPad}>
+    <ScrollView style={styles.scroll} contentContainerStyle={[styles.scrollPad, { paddingBottom: tabBarClearance }]}>
       <Text style={styles.hint}>¿Qué juego quieres agregar?</Text>
       {visible.map((g) => (
         <TouchableOpacity key={g.value} style={styles.bigCard} onPress={() => onSelect(g.value)}>
@@ -368,9 +370,10 @@ function MethodStep({
   onName: () => void;
 }) {
   const styles = useStyles();
+  const tabBarClearance = useTabBarClearance();
   const hasNameSearch = game === 'pokemon';
   return (
-    <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollPad}>
+    <ScrollView style={styles.scroll} contentContainerStyle={[styles.scrollPad, { paddingBottom: tabBarClearance }]}>
       <Text style={styles.hint}>¿Cómo quieres buscar la carta?</Text>
       <MethodOption icon="albums-outline" label="Por Set" desc="Explora las expansiones y elige una carta del set" onPress={onSet} />
       {hasNameSearch && (
@@ -408,6 +411,7 @@ function PokemonSetsStep({ onSelect }: { onSelect: (id: string, name: string) =>
   const dialog = useDialog();
   const styles = useStyles();
   const { palette } = useTheme();
+  const tabBarClearance = useTabBarClearance();
   const [sets, setSets] = useState<PkmSet[]>([]);
   const [filtered, setFiltered] = useState<PkmSet[]>([]);
   const [search, setSearch] = useState('');
@@ -456,7 +460,7 @@ function PokemonSetsStep({ onSelect }: { onSelect: (id: string, name: string) =>
             <Ionicons name="chevron-forward" size={16} color={palette.textMuted} />
           </TouchableOpacity>
         )}
-        contentContainerStyle={{ paddingBottom: 20 }}
+        contentContainerStyle={{ paddingBottom: tabBarClearance }}
       />
     </View>
   );
@@ -471,6 +475,7 @@ function MagicSetsStep({ onSelect }: { onSelect: (id: string, name: string) => v
   const dialog = useDialog();
   const styles = useStyles();
   const { palette } = useTheme();
+  const tabBarClearance = useTabBarClearance();
   const [sets, setSets] = useState<MtgSet[]>([]);
   const [filtered, setFiltered] = useState<MtgSet[]>([]);
   const [search, setSearch] = useState('');
@@ -526,7 +531,7 @@ function MagicSetsStep({ onSelect }: { onSelect: (id: string, name: string) => v
             <Ionicons name="chevron-forward" size={16} color={palette.textMuted} />
           </TouchableOpacity>
         )}
-        contentContainerStyle={{ paddingBottom: 20 }}
+        contentContainerStyle={{ paddingBottom: tabBarClearance }}
       />
     </View>
   );
@@ -547,6 +552,7 @@ function CardsInSetStep({ setId, game, userId, onSave, onCtxChange, resolveFolde
   const dialog = useDialog();
   const styles = useStyles();
   const { palette } = useTheme();
+  const tabBarClearance = useTabBarClearance();
   const [cards, setCards] = useState<PkmCard[]>([]);
   const [loading, setLoading] = useState(true);
   const [selected, setSelected] = useState<Map<string, Selection>>(new Map());
@@ -704,7 +710,7 @@ function CardsInSetStep({ setId, game, userId, onSave, onCtxChange, resolveFolde
 
       <CardPreviewModal card={previewCard} onClose={() => setPreviewCard(null)} onAdd={(c) => { tapCard(c); setPreviewCard(null); }} qty={previewCard ? selected.get(previewCard.id)?.qty ?? 0 : 0} currency={currency} usdToClp={usdToClp} />
 
-      <View style={styles.setBottomPanel}>
+      <View style={[styles.setBottomPanel, { paddingBottom: tabBarClearance }]}>
         <View style={styles.setBottomRow}>
           <Text style={styles.setBottomLabel}>Condición</Text>
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6 }}>
@@ -750,6 +756,7 @@ function SearchNameStep({ game, userId, onSave, onCtxChange, resolveFolderId, cu
   const dialog = useDialog();
   const styles = useStyles();
   const { palette } = useTheme();
+  const tabBarClearance = useTabBarClearance();
   const [query, setQuery] = useState('');
   const [cards, setCards] = useState<PkmCard[]>([]);
   const [loading, setLoading] = useState(false);
@@ -903,7 +910,7 @@ function SearchNameStep({ game, userId, onSave, onCtxChange, resolveFolderId, cu
         />
       )}
 
-      <View style={styles.setBottomPanel}>
+      <View style={[styles.setBottomPanel, { paddingBottom: tabBarClearance }]}>
         <View style={styles.setBottomRow}>
           <Text style={styles.setBottomLabel}>Condición</Text>
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6 }}>
@@ -981,6 +988,7 @@ function ConfirmStep({ game, card, userId, onSave, resolveFolderId, currency, us
   const dialog = useDialog();
   const styles = useStyles();
   const { palette } = useTheme();
+  const tabBarClearance = useTabBarClearance();
   const [condition, setCondition] = useState<CardCondition>('mint');
   const [quantity, setQuantity] = useState('1');
   const [price, setPrice] = useState('');
@@ -1016,7 +1024,7 @@ function ConfirmStep({ game, card, userId, onSave, resolveFolderId, currency, us
   }
 
   return (
-    <ScrollView style={styles.scroll} keyboardShouldPersistTaps="handled">
+    <ScrollView style={styles.scroll} contentContainerStyle={{ paddingBottom: tabBarClearance }} keyboardShouldPersistTaps="handled">
       <View style={styles.cardPreview}>
         <Image source={{ uri: (card.image_url_large ?? card.image_url) ?? undefined }} style={styles.cardPreviewImg} contentFit="contain" />
         <Text style={styles.previewName}>{card.name}</Text>
@@ -1053,7 +1061,6 @@ function ConfirmStep({ game, card, userId, onSave, resolveFolderId, currency, us
       <TouchableOpacity style={[styles.saveBtn, saving && styles.saveBtnDisabled]} onPress={handleSave} disabled={saving}>
         {saving ? <ActivityIndicator size="small" color="#fff" /> : <Text style={styles.saveBtnText}>Guardar en colección</Text>}
       </TouchableOpacity>
-      <View style={{ height: 40 }} />
     </ScrollView>
   );
 }

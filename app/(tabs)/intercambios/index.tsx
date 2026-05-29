@@ -11,6 +11,7 @@ import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/context/AuthContext';
 import { useTheme } from '@/context/ThemeContext';
 import { makeStyles } from '@/lib/theme';
+import { useTabBarClearance } from '@/lib/useTabBarClearance';
 import type { Meetup } from '@/types/database';
 
 type MeetupWithProfiles = Meetup & {
@@ -23,6 +24,7 @@ export default function EncuentrosScreen() {
   const { palette } = useTheme();
   const router = useRouter();
   const styles = useStyles();
+  const tabBarClearance = useTabBarClearance();
   const [meetups, setMeetups] = useState<MeetupWithProfiles[]>([]);
   const [unreadByMeetup, setUnreadByMeetup] = useState<Map<string, number>>(new Map());
   const [loading, setLoading] = useState(true);
@@ -64,7 +66,7 @@ export default function EncuentrosScreen() {
     if (!user) return;
     const uid = user.id;
     const channel = supabase
-      .channel(`encuentros-unread-${uid}`)
+      .channel(`intercambios-unread-${uid}`)
       .on(
         'postgres_changes',
         { event: 'INSERT', schema: 'public', table: 'messages' },
@@ -96,7 +98,7 @@ export default function EncuentrosScreen() {
         <FlatList
           data={meetups}
           keyExtractor={item => item.id}
-          contentContainerStyle={{ padding: 16, gap: 10 }}
+          contentContainerStyle={{ padding: 16, gap: 10, paddingBottom: tabBarClearance }}
           renderItem={({ item }) => (
             <MeetupRow
               meetup={item}

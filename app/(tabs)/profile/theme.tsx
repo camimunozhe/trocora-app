@@ -4,6 +4,7 @@ import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '@/context/ThemeContext';
 import { makeStyles, type ThemePreference } from '@/lib/theme';
+import { useTabBarClearance } from '@/lib/useTabBarClearance';
 
 type Option = { value: ThemePreference; label: string; sub: string; icon: 'phone-portrait' | 'sunny' | 'moon' };
 
@@ -17,6 +18,7 @@ export default function ThemeScreen() {
   const router = useRouter();
   const { preference, setPreference, palette } = useTheme();
   const styles = useStyles();
+  const tabBarClearance = useTabBarClearance();
 
   return (
     <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
@@ -28,7 +30,7 @@ export default function ThemeScreen() {
         <View style={{ width: 24 }} />
       </View>
 
-      <ScrollView contentContainerStyle={{ padding: 16 }}>
+      <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: tabBarClearance }}>
         <View style={styles.list}>
           {OPTIONS.map((opt, i) => {
             const selected = preference === opt.value;

@@ -6,7 +6,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/context/AuthContext';
 import { useTheme } from '@/context/ThemeContext';
-import { CHILE_REGIONS } from '@/lib/regions';
+import { COUNTRIES, DEFAULT_COUNTRY, regionsForCountry } from '@/lib/regions';
 import { makeStyles } from '@/lib/theme';
 
 export default function OnboardingRegionsScreen() {
@@ -15,6 +15,7 @@ export default function OnboardingRegionsScreen() {
   const router = useRouter();
   const styles = useStyles();
   const [selected, setSelected] = useState<Set<string>>(new Set(profile?.regions ?? []));
+  const [country, setCountry] = useState<string>(profile?.country ?? DEFAULT_COUNTRY);
   const [saving, setSaving] = useState(false);
 
   function toggle(code: string) {
@@ -30,7 +31,7 @@ export default function OnboardingRegionsScreen() {
     setSaving(true);
     const { error } = await supabase
       .from('profiles')
-      .update({ regions: Array.from(selected), onboarding_completed: true })
+      .update({ regions: Array.from(selected), country, onboarding_completed: true })
       .eq('id', user!.id);
     if (error) {
       setSaving(false);
@@ -61,8 +62,24 @@ export default function OnboardingRegionsScreen() {
           Elige una o más regiones para conectar con coleccionistas cerca de ti. Puedes cambiarlo cuando quieras desde Configuración.
         </Text>
 
+        <View style={styles.countryRow}>
+          {COUNTRIES.map(c => {
+            const on = country === c.code;
+            return (
+              <TouchableOpacity
+                key={c.code}
+                style={[styles.countryChip, on && styles.countryChipActive]}
+                onPress={() => { setCountry(c.code); setSelected(new Set()); }}
+                activeOpacity={0.7}
+              >
+                <Text style={[styles.countryChipText, on && styles.countryChipTextActive]}>{c.flag}  {c.label}</Text>
+              </TouchableOpacity>
+            );
+          })}
+        </View>
+
         <View style={styles.list}>
-          {CHILE_REGIONS.map(r => {
+          {regionsForCountry(country).map(r => {
             const isOn = selected.has(r.code);
             return (
               <TouchableOpacity
@@ -109,6 +126,15 @@ const useStyles = makeStyles((p) => ({
   title: { color: p.textPrimary, fontSize: 24, fontWeight: '800', marginTop: 4 },
   subtitle: { color: p.textSecondary, fontSize: 14, lineHeight: 20, marginTop: 8 },
   list: { gap: 8, marginTop: 20 },
+  countryRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 16 },
+  countryChip: {
+    flexDirection: 'row', alignItems: 'center',
+    paddingHorizontal: 14, paddingVertical: 10, borderRadius: 12,
+    borderWidth: 1, borderColor: p.border, backgroundColor: p.surface,
+  },
+  countryChipActive: { borderColor: p.primary, backgroundColor: p.primaryMuted },
+  countryChipText: { color: p.textPrimary, fontSize: 15, fontWeight: '600' },
+  countryChipTextActive: { color: p.primary },
   row: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
     padding: 14, borderRadius: 12, borderWidth: 1, borderColor: p.border, backgroundColor: p.surface,

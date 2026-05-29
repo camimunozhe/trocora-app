@@ -1,4 +1,20 @@
 // node scripts/sync-pokemon-prices.js
+//
+// Sincroniza precios de cartas Pokémon desde TCGdex (https://api.tcgdex.net).
+// Reemplaza la integración previa con pokemontcg.io, que migró a Scrydex (de pago).
+// TCGdex es gratis, open source (MIT) y NO requiere API key.
+//
+// TCGdex usa el mismo esquema de IDs que pokemontcg.io para los sets principales
+// (swsh3-136, sv10-79, ecard3-47, ...), así que macheamos por `id` directo contra
+// las filas existentes en pokemon_cards. Algunos sets con naming especial de
+// pokemontcg.io (rsv10pt5, zsv10pt5, tk2a, ...) no existen en TCGdex y devuelven
+// 404: esas cartas se saltan y conservan su precio previo (degradación elegante).
+//
+// El precio de TCGdex solo viene en el detalle por carta, así que iteramos los IDs
+// de la DB y pedimos /v2/en/cards/{id} para cada uno, con concurrencia moderada,
+// backoff en 429 y reintento ante errores de red. La escritura usa el mismo camino
+// que antes: RPC batch_update_pokemon_prices + historial en pokemon_card_price_history.
+
 const { createClient } = require('@supabase/supabase-js');
 const { readFileSync }  = require('fs');
 const { resolve }       = require('path');
@@ -13,9 +29,11 @@ const env = Object.fromEntries(
 
 const SUPABASE_URL     = env.EXPO_PUBLIC_SUPABASE_URL;
 const SERVICE_ROLE_KEY = env.SUPABASE_SERVICE_ROLE_KEY;
-const POKEMON_API_KEY  = env.POKEMONTCG_API_KEY || '';
-const API_BASE         = 'https://api.pokemontcg.io/v2/cards';
-const PAGE_SIZE        = 250;
+const API_BASE         = 'https://api.tcgdex.net/v2/en/cards';
+const CONCURRENCY      = 6;     // peticiones en paralelo (TCGdex es comunitario: ser amable)
+const CHUNK_DELAY_MS   = 120;   // pausa entre lotes
+const FLUSH_EVERY      = 250;   // cartas con precio acumuladas antes de escribir a la DB
+const MAX_RETRIES      = 3;
 
 if (!SUPABASE_URL || !SERVICE_ROLE_KEY) {
   console.error('Missing EXPO_PUBLIC_SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY in .env');
@@ -24,82 +42,72 @@ if (!SUPABASE_URL || !SERVICE_ROLE_KEY) {
 
 const supabase = createClient(SUPABASE_URL, SERVICE_ROLE_KEY);
 
-async function fetchPage(page) {
-  const url     = `${API_BASE}?pageSize=${PAGE_SIZE}&page=${page}&select=id,tcgplayer`;
-  const headers = POKEMON_API_KEY ? { 'X-Api-Key': POKEMON_API_KEY } : {};
-  const res     = await fetch(url, { headers });
-  if (!res.ok) throw new Error(`API ${res.status} on page ${page}`);
-  return res.json();
-}
+const num = v => (typeof v === 'number' && Number.isFinite(v) ? v : null);
+const sleep = ms => new Promise(r => setTimeout(r, ms));
 
-function extractPrices(tcgplayer) {
-  if (!tcgplayer?.prices) return null;
-  const p      = tcgplayer.prices;
-  const normal = p.normal ?? p.unlimited ?? null;
-  const foil   = p.holofoil ?? p.reverseHolofoil ?? p['1stEditionHolofoil'] ?? null;
-  return {
-    normal_market: normal?.market ?? null,
-    normal_low:    normal?.low    ?? null,
-    foil_market:   foil?.market   ?? null,
-    foil_low:      foil?.low      ?? null,
+// Mapea pricing.tcgplayer (USD) a las columnas tcgplayer_* de pokemon_cards.
+// Mantiene la misma semántica que la versión pokemontcg.io: normal prioriza
+// normal/unlimited; foil prioriza holofoil > reverse-holofoil > 1st-edition-holofoil.
+function extractPrices(pricing) {
+  const t = pricing?.tcgplayer;
+  if (!t) return null;
+  const normal = t.normal ?? t.unlimited ?? t['1st-edition'] ?? null;
+  const foil   = t.holofoil ?? t['reverse-holofoil'] ?? t['1st-edition-holofoil'] ?? null;
+  const prices = {
+    normal_market: num(normal?.marketPrice),
+    normal_low:    num(normal?.lowPrice),
+    foil_market:   num(foil?.marketPrice),
+    foil_low:      num(foil?.lowPrice),
   };
+  if (Object.values(prices).every(v => v === null)) return null;
+  return prices;
 }
 
-async function upsertBatch(cards, existingIds) {
-  const cardUpdates = [];
-  const historyRows = [];
-  const today       = new Date().toISOString().slice(0, 10);
-
-  for (const card of cards) {
-    if (!existingIds.has(card.id)) continue;
-    const prices = extractPrices(card.tcgplayer);
-    if (!prices || Object.values(prices).every(v => v === null)) continue;
-
-    cardUpdates.push({
-      id:                       card.id,
-      tcgplayer_normal_market:  prices.normal_market,
-      tcgplayer_normal_low:     prices.normal_low,
-      tcgplayer_foil_market:    prices.foil_market,
-      tcgplayer_foil_low:       prices.foil_low,
-      price_updated_at:         new Date().toISOString(),
-    });
-
-    historyRows.push({
-      card_id:       card.id,
-      date:          today,
-      normal_market: prices.normal_market,
-      normal_low:    prices.normal_low,
-      foil_market:   prices.foil_market,
-      foil_low:      prices.foil_low,
-    });
+// Pide una carta a TCGdex. Devuelve { prices } | { notFound: true } | { error }.
+async function fetchCard(id) {
+  for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+    try {
+      const res = await fetch(`${API_BASE}/${encodeURIComponent(id)}`, {
+        headers: { 'User-Agent': 'trocora-app/1.0 (+https://trocora.com)' },
+      });
+      if (res.status === 404) return { notFound: true };
+      if (res.status === 429) {
+        const retryAfter = parseInt(res.headers.get('retry-after') || '', 10);
+        const wait = Number.isFinite(retryAfter) ? retryAfter * 1000 : 1000 * 2 ** attempt;
+        await sleep(wait);
+        continue;
+      }
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const card = await res.json();
+      return { prices: extractPrices(card?.pricing) };
+    } catch (err) {
+      if (attempt === MAX_RETRIES) return { error: err.message };
+      await sleep(500 * 2 ** attempt);
+    }
   }
+  return { error: 'exhausted retries' };
+}
 
+async function flush(cardUpdates, historyRows) {
   if (cardUpdates.length > 0) {
     const payload = cardUpdates.map(c => ({
-      id: c.id,
-      nm: c.tcgplayer_normal_market,
-      nl: c.tcgplayer_normal_low,
-      fm: c.tcgplayer_foil_market,
-      fl: c.tcgplayer_foil_low,
+      id: c.id, nm: c.normal_market, nl: c.normal_low, fm: c.foil_market, fl: c.foil_low,
     }));
     const { error } = await supabase.rpc('batch_update_pokemon_prices', { updates: payload });
     if (error) console.error('  update error:', error.message);
   }
-
   if (historyRows.length > 0) {
     const { error } = await supabase
       .from('pokemon_card_price_history')
       .upsert(historyRows, { onConflict: 'card_id,date', ignoreDuplicates: false });
     if (error) console.error('  history error:', error.message);
   }
-
-  return cardUpdates.length;
 }
 
 async function loadExistingIds() {
-  const ids = new Set();
-  let page  = 0;
-  const size = 1000;
+  const ids  = [];
+  let page    = 0;
+  const size  = 1000;
   while (true) {
     const { data, error } = await supabase
       .from('pokemon_cards')
@@ -107,7 +115,7 @@ async function loadExistingIds() {
       .range(page * size, page * size + size - 1);
     if (error) throw error;
     if (!data || data.length === 0) break;
-    data.forEach(r => ids.add(r.id));
+    data.forEach(r => ids.push(r.id));
     if (data.length < size) break;
     page++;
   }
@@ -115,46 +123,57 @@ async function loadExistingIds() {
 }
 
 async function main() {
-  console.log('=== Pokemon price sync ===');
-  console.log(`API key: ${POKEMON_API_KEY ? 'present (20k req/day)' : 'missing (1k req/day, should be fine)'}`);
+  console.log('=== Pokemon price sync (TCGdex) ===');
 
   process.stdout.write('Loading existing card IDs from DB... ');
-  const existingIds = await loadExistingIds();
-  console.log(`${existingIds.size} cards in DB`);
+  const ids = await loadExistingIds();
+  console.log(`${ids.length} cards in DB`);
 
-  const first      = await fetchPage(1);
-  const total      = first.totalCount;
-  const totalPages = Math.ceil(total / PAGE_SIZE);
-  console.log(`Cards in API: ${total} — Pages: ${totalPages}\n`);
+  const today = new Date().toISOString().slice(0, 10);
+  let cardUpdates = [];
+  let historyRows = [];
+  let priced = 0, notFound = 0, noPrice = 0, errors = 0, done = 0;
 
-  let updated = 0;
+  for (let i = 0; i < ids.length; i += CONCURRENCY) {
+    const chunk = ids.slice(i, i + CONCURRENCY);
+    const results = await Promise.all(chunk.map(async id => ({ id, ...(await fetchCard(id)) })));
 
-  process.stdout.write(`Page 1/${totalPages}... `);
-  updated += await upsertBatch(first.data, existingIds);
-  console.log(`${updated} with prices so far`);
-
-  for (let page = 2; page <= totalPages; page++) {
-    process.stdout.write(`Page ${page}/${totalPages}... `);
-    try {
-      const { data } = await fetchPage(page);
-      const n = await upsertBatch(data, existingIds);
-      updated += n;
-      console.log(`${updated} with prices so far`);
-    } catch (err) {
-      console.error(`Failed: ${err.message}. Retrying...`);
-      await new Promise(r => setTimeout(r, 2000));
-      try {
-        const { data } = await fetchPage(page);
-        updated += await upsertBatch(data, existingIds);
-        console.log('retry ok');
-      } catch (e) {
-        console.error(`Skipping page ${page}: ${e.message}`);
-      }
+    for (const r of results) {
+      done++;
+      if (r.notFound) { notFound++; continue; }
+      if (r.error)    { errors++; continue; }
+      if (!r.prices)  { noPrice++; continue; }
+      priced++;
+      cardUpdates.push({ id: r.id, ...r.prices });
+      historyRows.push({
+        card_id:       r.id,
+        date:          today,
+        normal_market: r.prices.normal_market,
+        normal_low:    r.prices.normal_low,
+        foil_market:   r.prices.foil_market,
+        foil_low:      r.prices.foil_low,
+      });
     }
-    await new Promise(r => setTimeout(r, 150));
+
+    if (cardUpdates.length >= FLUSH_EVERY) {
+      await flush(cardUpdates, historyRows);
+      cardUpdates = [];
+      historyRows = [];
+    }
+
+    if (done % 500 < CONCURRENCY) {
+      process.stdout.write(
+        `\r${done}/${ids.length} — priced ${priced}, no-price ${noPrice}, 404 ${notFound}, err ${errors}   `,
+      );
+    }
+    await sleep(CHUNK_DELAY_MS);
   }
 
-  console.log(`\nDone. ${updated} cards synced with prices.`);
+  await flush(cardUpdates, historyRows);
+
+  console.log(
+    `\n\nDone. ${priced} cards priced · ${noPrice} sin precio · ${notFound} no en TCGdex (404) · ${errors} errores.`,
+  );
 }
 
 main().catch(err => { console.error(err); process.exit(1); });

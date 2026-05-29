@@ -14,6 +14,7 @@ import { supabase } from '@/lib/supabase';
 import type { WatchlistEntry } from '@/lib/watchlist';
 import { removeFromWatchlist } from '@/lib/watchlist';
 import { makeStyles } from '@/lib/theme';
+import { useTabBarClearance } from '@/lib/useTabBarClearance';
 import type { CardCondition } from '@/types/database';
 
 const CONDITION_LABELS: Record<CardCondition, string> = {
@@ -28,6 +29,7 @@ export default function WatchlistScreen() {
   const { isPremium } = usePremium();
   const dialog = useDialog();
   const styles = useStyles();
+  const tabBarClearance = useTabBarClearance();
   const [entries, setEntries] = useState<WatchlistEntry[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -105,7 +107,7 @@ export default function WatchlistScreen() {
           </Text>
         </View>
       ) : (
-        <ScrollView contentContainerStyle={styles.scroll}>
+        <ScrollView contentContainerStyle={[styles.scroll, { paddingBottom: tabBarClearance }]}>
           {entries.map(e => (
             <View key={e.id} style={styles.card}>
               <View style={styles.cardHeader}>

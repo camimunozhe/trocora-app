@@ -14,13 +14,16 @@ import { useTheme } from '@/context/ThemeContext';
 import { usePremium } from '@/lib/usePremium';
 import { useDialog } from '@/lib/AppDialog';
 import type { CardCollection, TCGGame, CardCondition } from '@/types/database';
-import { availabilityBorder } from '@/lib/cardStyle';
 import { ProBadge } from '@/lib/ProBadge';
 import { PhotoLightbox } from '@/lib/PhotoLightbox';
 import { addToWatchlist, removeFromWatchlist, isInWatchlist } from '@/lib/watchlist';
+import { fetchBlockedIds } from '@/lib/moderation';
 import { resolveEnabledGames } from '@/lib/enabledGames';
 import { REGION_LABEL } from '@/lib/regions';
+import { formatCurrencyValue } from '@/lib/currency';
+import { PriceTagPill } from '@/lib/CardPriceTag';
 import { makeStyles } from '@/lib/theme';
+import { useTabBarClearance } from '@/lib/useTabBarClearance';
 
 type IoniconName = React.ComponentProps<typeof Ionicons>['name'];
 
@@ -117,6 +120,7 @@ export default function ExploreScreen() {
   const dialog = useDialog();
   const { isPremium } = usePremium();
   const styles = useStyles();
+  const tabBarClearance = useTabBarClearance();
   const [allCards, setAllCards] = useState<ExploreCard[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
@@ -130,13 +134,17 @@ export default function ExploreScreen() {
 
   const fetchCards = useCallback(async () => {
     if (!user) return;
-    const { data } = await supabase
-      .from('cards_collection')
-      .select('*, profiles!cards_collection_user_id_fkey!inner(username, avatar_url, regions, created_at, premium_status)')
-      .eq('is_published', true)
-      .neq('user_id', user.id)
-      .order('created_at', { ascending: false });
-    setAllCards((data as ExploreCard[]) ?? []);
+    const [{ data }, blockedIds] = await Promise.all([
+      supabase
+        .from('cards_collection')
+        .select('*, profiles!cards_collection_user_id_fkey!inner(username, avatar_url, regions, created_at, premium_status)')
+        .eq('is_published', true)
+        .neq('user_id', user.id)
+        .order('created_at', { ascending: false }),
+      fetchBlockedIds(user.id),
+    ]);
+    const blocked = new Set(blockedIds);
+    setAllCards(((data as ExploreCard[]) ?? []).filter((c) => !blocked.has(c.user_id)));
   }, [user]);
 
   const handleRefresh = useCallback(async () => {
@@ -278,7 +286,7 @@ export default function ExploreScreen() {
             <CardItem group={item} onPress={() => setSelectedGroup(item)} />
           )}
           ListEmptyComponent={<EmptyExplore />}
-          contentContainerStyle={{ paddingHorizontal: 8, paddingBottom: 20 }}
+          contentContainerStyle={{ paddingHorizontal: 8, paddingBottom: tabBarClearance }}
           refreshControl={
             <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={palette.primary} />
           }
@@ -399,15 +407,23 @@ function CardItem({ group, onPress }: { group: CardGroup; onPress: () => void })
   const styles = useStyles();
   const gameIcon = GAME_ICON[group.game];
   const count = group.listings.length;
+  const prices = group.listings.map(l => l.price_reference).filter((p): p is number => p != null);
+  const priceCur = group.listings.find(l => l.price_reference_currency)?.price_reference_currency ?? 'usd';
+  const priceLabel = prices.length > 0
+    ? `${prices.length > 1 ? 'Desde ' : ''}${formatCurrencyValue(Math.min(...prices), priceCur)}`
+    : null;
   return (
-    <TouchableOpacity style={[styles.thumb, availabilityBorder({ is_published: true })]} onPress={onPress} activeOpacity={0.7}>
-      {group.image_url ? (
-        <Image source={{ uri: group.image_url }} style={styles.thumbImg} contentFit="contain" />
-      ) : (
-        <View style={styles.thumbPlaceholder}>
-          <Ionicons name={gameIcon.name} size={32} color={gameIcon.color} />
-        </View>
-      )}
+    <TouchableOpacity style={styles.thumb} onPress={onPress} activeOpacity={0.7}>
+      <View style={styles.thumbImageWrap}>
+        {group.image_url ? (
+          <Image source={{ uri: group.image_url }} style={styles.thumbImg} contentFit="contain" />
+        ) : (
+          <View style={styles.thumbPlaceholder}>
+            <Ionicons name={gameIcon.name} size={32} color={gameIcon.color} />
+          </View>
+        )}
+        {priceLabel && <PriceTagPill label={priceLabel} />}
+      </View>
       <View style={styles.thumbFooter}>
         {group.card_number && <Text style={styles.thumbNum}>#{group.card_number}</Text>}
         <Text style={styles.thumbName} numberOfLines={1}>{group.card_name}</Text>
@@ -542,11 +558,11 @@ function CardDetailModal({ group, myRegions, onClose, onPropose }: { group: Card
                 {(() => {
                   const prices = group.listings.map(l => l.price_reference).filter((p): p is number => p != null);
                   const minPrice = prices.length > 0 ? Math.min(...prices) : null;
-                  const currency = (group.listings.find(l => l.price_reference_currency)?.price_reference_currency ?? 'usd').toUpperCase();
+                  const cur = group.listings.find(l => l.price_reference_currency)?.price_reference_currency ?? 'usd';
                   if (minPrice == null) return null;
                   return (
                     <View style={styles.modalSummary}>
-                      <Text style={styles.modalSummaryPrice}>Desde ${minPrice} {currency}</Text>
+                      <Text style={styles.modalSummaryPrice}>Desde {formatCurrencyValue(minPrice, cur)} {cur.toUpperCase()}</Text>
                     </View>
                   );
                 })()}
@@ -621,7 +637,7 @@ function CardDetailModal({ group, myRegions, onClose, onPropose }: { group: Card
                           <>
                             <Text style={styles.listingMetaDot}>·</Text>
                             <Text style={[styles.listingMeta, { color: palette.successAlt }]}>
-                              ${l.price_reference} {(l.price_reference_currency ?? 'usd').toUpperCase()}
+                              {formatCurrencyValue(l.price_reference, l.price_reference_currency ?? 'usd')} {(l.price_reference_currency ?? 'usd').toUpperCase()}
                             </Text>
                           </>
                         )}
@@ -815,6 +831,7 @@ const useStyles = makeStyles((p) => ({
     backgroundColor: p.surface, borderRadius: 10, padding: 8,
     borderWidth: 1, borderColor: p.border,
   },
+  thumbImageWrap: { width: '100%', position: 'relative' },
   thumbImg: { width: '100%', aspectRatio: 0.715, borderRadius: 6 },
   thumbPlaceholder: {
     width: '100%', aspectRatio: 0.715, borderRadius: 6,

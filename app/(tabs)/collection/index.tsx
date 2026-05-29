@@ -20,13 +20,15 @@ import type { CardCollection, CollectionFolder, TCGGame } from '@/types/database
 import { formatPrice, formatCurrencyValue, currencyLabel } from '@/lib/currency';
 import { validateFolderGame, gameLabel } from '@/lib/folderValidation';
 import { getUsdToClp } from '@/lib/exchangeRate';
-import { availabilityBorder } from '@/lib/cardStyle';
+import { CardPriceTag } from '@/lib/CardPriceTag';
 import { resolveEnabledGames } from '@/lib/enabledGames';
 import { assertCanPublish } from '@/lib/publishGate';
 import { effectivePrice, COLLECTION_CARD_SELECT, type CardWithCatalog } from '@/lib/cardPrice';
 import { FolderIcon } from '@/lib/folderIcon';
 import { UndoSnackbar } from '@/lib/UndoSnackbar';
+import { PublishPriceModal } from '@/lib/PublishPriceModal';
 import { makeStyles } from '@/lib/theme';
+import { useTabBarClearance } from '@/lib/useTabBarClearance';
 
 type IoniconName = React.ComponentProps<typeof Ionicons>['name'];
 
@@ -56,6 +58,7 @@ export default function CollectionScreen() {
   const dialog = useDialog();
   const { isPremium } = usePremium();
   const styles = useStyles();
+  const tabBarClearance = useTabBarClearance();
   const [folders, setFolders] = useState<CollectionFolder[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
@@ -64,6 +67,8 @@ export default function CollectionScreen() {
   const [folderPickerCard, setFolderPickerCard] = useState<CardCollection | null>(null);
   const [allUserCards, setAllUserCards] = useState<CardCollectionWithPrice[]>([]);
   const [cardActionCard, setCardActionCard] = useState<CardCollectionWithPrice | null>(null);
+  const [publishCard, setPublishCard] = useState<CardCollectionWithPrice | null>(null);
+  const [publishSaving, setPublishSaving] = useState(false);
   const [selectionMode, setSelectionMode] = useState(false);
   const [selectedCards, setSelectedCards] = useState<Set<string>>(new Set());
   const [bulkFolderOpen, setBulkFolderOpen] = useState(false);
@@ -314,6 +319,34 @@ export default function CollectionScreen() {
     setCardActionCard(c => c?.id === card.id ? { ...c, [field]: value } : c);
   }
 
+  // Publicar desde el home: el gate y el modal de precio corren con el sheet ya
+  // cerrado, para no apilar modales (ver TROC-22).
+  async function startPublish(card: CardCollectionWithPrice) {
+    if (user) {
+      const ok = await assertCanPublish({
+        userId: user.id, isPremium, addCount: 1, dialog,
+        onUpgrade: () => router.push('/paywall'),
+      });
+      if (!ok) return;
+    }
+    setPublishCard(card);
+  }
+
+  async function confirmPublishPrice(price: number) {
+    if (!publishCard) return;
+    setPublishSaving(true);
+    const update: Partial<Omit<CardCollection, 'id' | 'user_id' | 'created_at'>> = {
+      price_reference: price,
+      price_reference_currency: currency,
+      is_published: true,
+    };
+    await supabase.from('cards_collection').update(update).eq('id', publishCard.id);
+    setAllUserCards(prev => prev.map(c => c.id === publishCard.id ? { ...c, ...update } : c));
+    patchCollectionCard(publishCard.id, update);
+    setPublishSaving(false);
+    setPublishCard(null);
+  }
+
   async function handleDeleteCard(cardId: string) {
     dialog.confirm({
       title: 'Eliminar carta',
@@ -511,7 +544,7 @@ export default function CollectionScreen() {
             />
           )}
           ListEmptyComponent={allUserCards.length === 0 ? <EmptyCollection onAdd={() => router.push('/(tabs)/collection/add')} /> : null}
-          contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: selectionMode ? 96 : 20, gap: 8 }}
+          contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: selectionMode ? 96 : tabBarClearance, gap: 8 }}
           refreshControl={
             <RefreshControl
               refreshing={refreshing}
@@ -577,7 +610,16 @@ export default function CollectionScreen() {
           setCardActionCard(null);
           setTimeout(() => card && setFolderPickerCard(card), 300);
         }}
-        onTogglePublished={(value) => cardActionCard && handleToggleField(cardActionCard, 'is_published', value)}
+        onTogglePublished={(value) => {
+          const card = cardActionCard;
+          setCardActionCard(null);
+          if (!card) return;
+          if (value) {
+            setTimeout(() => startPublish(card), 300);
+          } else {
+            handleToggleField(card, 'is_published', false);
+          }
+        }}
         onDelete={() => {
           const id = cardActionCard?.id;
           setCardActionCard(null);
@@ -627,6 +669,17 @@ export default function CollectionScreen() {
         onDelete={() => folderActionFolder && deleteFolderConfirmed(folderActionFolder)}
       />
 
+      <PublishPriceModal
+        visible={!!publishCard}
+        card={publishCard}
+        currency={currency}
+        usdToClp={usdToClp}
+        mode="publish"
+        saving={publishSaving}
+        onCancel={() => setPublishCard(null)}
+        onConfirm={confirmPublishPrice}
+      />
+
       <UndoSnackbar
         visible={pendingDeleteIds.size > 0}
         message={`${pendingDeleteIds.size} carta${pendingDeleteIds.size !== 1 ? 's' : ''} eliminada${pendingDeleteIds.size !== 1 ? 's' : ''}`}
@@ -674,8 +727,15 @@ function CardActionModal({
               <Text style={styles.actionCardSub} numberOfLines={1}>
                 {[card.card_number && `#${card.card_number}`, card.set_name].filter(Boolean).join(' · ')}
               </Text>
-              {price > 0 && (
-                <Text style={styles.actionCardPrice}>{formatCurrencyValue(price, currency)}</Text>
+              {card.is_published ? (
+                <View style={styles.publishedChip}>
+                  <Ionicons name="pricetag" size={11} color={palette.primary} />
+                  <Text style={styles.publishedChipText}>
+                    {price > 0 ? `En venta · ${formatCurrencyValue(price, currency)}` : 'Publicada'}
+                  </Text>
+                </View>
+              ) : (
+                price > 0 && <Text style={styles.actionCardPrice}>{formatCurrencyValue(price, currency)}</Text>
               )}
             </View>
           </View>
@@ -696,12 +756,18 @@ function CardActionModal({
 
           <View style={styles.actionRow}>
             <Ionicons name="pricetag-outline" size={20} color={palette.successAlt} />
-            <Text style={styles.actionRowText}>Publicar</Text>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.actionRowText}>Publicar</Text>
+              <Text style={styles.actionRowHint}>
+                {card.is_published
+                  ? 'Visible en Explorar para vender o intercambiar'
+                  : 'Ponla en Explorar para vender o intercambiar'}
+              </Text>
+            </View>
             <Switch
               value={card.is_published}
               onValueChange={onTogglePublished}
               trackColor={{ true: palette.primary }}
-              style={{ marginLeft: 'auto' }}
             />
           </View>
 
@@ -992,25 +1058,28 @@ function CardItem({ card, onPress, onLongPress, selected, selectionMode, currenc
   const styles = useStyles();
   const { palette } = useTheme();
   const gameIcon = GAME_ICON[card.game];
-  const price = effectivePrice(card, currency ?? 'usd', usdToClp ?? 950);
   return (
     <TouchableOpacity
-      style={[styles.thumb, availabilityBorder(card), selected && styles.thumbSelected]}
+      style={[styles.thumb, selected && styles.thumbSelected]}
       onPress={onPress}
       onLongPress={onLongPress}
       activeOpacity={0.7}
     >
-      {card.image_url ? (
-        <Image source={{ uri: card.image_url }} style={styles.thumbImg} contentFit="contain" />
-      ) : (
-        <View style={styles.thumbPlaceholder}>
-          <Ionicons name={gameIcon.name} size={32} color={gameIcon.color} />
-        </View>
-      )}
+      <View style={styles.thumbImageWrap}>
+        {card.image_url ? (
+          <Image source={{ uri: card.image_url }} style={styles.thumbImg} contentFit="contain" />
+        ) : (
+          <View style={styles.thumbPlaceholder}>
+            <Ionicons name={gameIcon.name} size={32} color={gameIcon.color} />
+          </View>
+        )}
+        {card.is_published && (
+          <CardPriceTag card={card} currency={currency ?? 'usd'} usdToClp={usdToClp ?? 950} />
+        )}
+      </View>
       <View style={styles.thumbFooter}>
         {card.card_number && <Text style={styles.thumbNum}>#{card.card_number}</Text>}
         <Text style={styles.thumbName} numberOfLines={1}>{card.card_name}</Text>
-        {price > 0 && <Text style={styles.thumbPrice}>{formatCurrencyValue(price, currency ?? 'usd')}</Text>}
       </View>
       {card.quantity > 1 && (
         <View style={styles.qtyBadge}>
@@ -1132,6 +1201,7 @@ const useStyles = makeStyles((p) => ({
     borderWidth: 1, borderColor: p.border, overflow: 'hidden',
   },
   thumbSelected: { borderColor: p.primary, borderWidth: 2 },
+  thumbImageWrap: { width: '100%', position: 'relative' },
   thumbImg: { width: '100%', aspectRatio: 0.715, borderRadius: 8 },
   thumbPlaceholder: {
     width: '100%', aspectRatio: 0.715, borderRadius: 8,
@@ -1207,6 +1277,13 @@ const useStyles = makeStyles((p) => ({
     paddingHorizontal: 16, paddingVertical: 14,
   },
   actionRowText: { color: p.textPrimary, fontSize: 15 },
+  actionRowHint: { color: p.textMuted, fontSize: 11, marginTop: 2 },
+  publishedChip: {
+    flexDirection: 'row', alignItems: 'center', gap: 4, alignSelf: 'flex-start',
+    marginTop: 6, backgroundColor: p.primaryMuted,
+    borderRadius: 8, paddingVertical: 3, paddingHorizontal: 8,
+  },
+  publishedChipText: { color: p.primary, fontSize: 12, fontWeight: '700' },
 
   folderRow: {
     flexDirection: 'row', alignItems: 'center', gap: 12,

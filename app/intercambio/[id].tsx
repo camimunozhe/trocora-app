@@ -1,20 +1,23 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity,
-  ActivityIndicator, Alert, TextInput, Modal,
+  ActivityIndicator, TextInput, Modal,
   KeyboardAvoidingView, Platform,
 } from 'react-native';
-import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaProvider, SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Image } from 'expo-image';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/context/AuthContext';
 import { useTheme } from '@/context/ThemeContext';
+import { useDialog } from '@/lib/AppDialog';
 import { resolveEnabledGames } from '@/lib/enabledGames';
 import type { Meetup, MeetupStatus, CardCollection, CollectionFolder, Message, TCGGame } from '@/types/database';
+import { formatCurrencyValue } from '@/lib/currency';
 import { FolderIcon } from '@/lib/folderIcon';
 import { ProBadge } from '@/lib/ProBadge';
+import { BlockReportSheet } from '@/lib/BlockReportSheet';
 import { makeStyles, type Palette } from '@/lib/theme';
 
 type CardWithMeta = CardCollection & {
@@ -82,8 +85,10 @@ export default function EncuentroDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const { user, profile } = useAuth();
   const { palette } = useTheme();
+  const dialog = useDialog();
   const router = useRouter();
   const styles = useStyles();
+  const insets = useSafeAreaInsets();
 
   const [meetup, setMeetup] = useState<MeetupFull | null>(null);
   const [cards, setCards] = useState<CardWithMeta[]>([]);
@@ -97,6 +102,7 @@ export default function EncuentroDetailScreen() {
 
   const [zoomedCard, setZoomedCard] = useState<ZoomedCard | null>(null);
   const [showSummary, setShowSummary] = useState(false);
+  const [showUserActions, setShowUserActions] = useState(false);
 
   const [showEdit, setShowEdit] = useState(false);
   const [loadingEdit, setLoadingEdit] = useState(false);
@@ -174,19 +180,21 @@ export default function EncuentroDetailScreen() {
 
   useEffect(() => {
     if (!id) return;
+    let cancelled = false;
     const channel = supabase
       .channel(`meetup-messages:${id}`)
       .on(
         'postgres_changes',
         { event: 'INSERT', schema: 'public', table: 'messages', filter: `meetup_id=eq.${id}` },
         (payload) => {
+          if (cancelled || !payload.new) return;
           const newMsg = payload.new as Message;
           setMessages(prev => prev.some(m => m.id === newMsg.id) ? prev : [...prev, newMsg]);
           if (user && newMsg.sender_id !== user.id) markAsRead();
         },
       )
       .subscribe();
-    return () => { supabase.removeChannel(channel); };
+    return () => { cancelled = true; supabase.removeChannel(channel); };
   }, [id, user, markAsRead]);
 
   if (loading) return <ActivityIndicator style={{ flex: 1, backgroundColor: palette.bg }} color={palette.textSecondary} />;
@@ -194,7 +202,7 @@ export default function EncuentroDetailScreen() {
     return (
       <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
         <View style={styles.header}>
-          <TouchableOpacity onPress={() => router.canGoBack() ? router.back() : router.replace('/(tabs)/encuentros')} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+          <TouchableOpacity onPress={() => router.canGoBack() ? router.back() : router.replace('/(tabs)/intercambios')} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
             <Ionicons name="chevron-back" size={24} color={palette.primary} />
           </TouchableOpacity>
           <Text style={styles.headerUsername}>Intercambio</Text>
@@ -206,7 +214,7 @@ export default function EncuentroDetailScreen() {
             No encontramos este intercambio. Puede que haya sido eliminado o ya no tengas acceso.
           </Text>
           <TouchableOpacity
-            onPress={() => router.canGoBack() ? router.back() : router.replace('/(tabs)/encuentros')}
+            onPress={() => router.canGoBack() ? router.back() : router.replace('/(tabs)/intercambios')}
             style={{ marginTop: 8, backgroundColor: palette.surface, borderWidth: 1, borderColor: palette.border, borderRadius: 10, paddingHorizontal: 16, paddingVertical: 10 }}
           >
             <Text style={{ color: palette.primary, fontSize: 14, fontWeight: '600' }}>Volver a intercambios</Text>
@@ -221,8 +229,16 @@ export default function EncuentroDetailScreen() {
   const otherId = isProposer ? meetup.receiver_id : meetup.proposer_id;
   const myCards = cards.filter(c => c.side === (isProposer ? 'proposer' : 'receiver'));
   const status = statusFor(palette, meetup.status);
-  const canRespond = !isProposer && meetup.status === 'pending';
-  const canEdit = meetup.status === 'pending';
+  // La negociación está abierta mientras es 'pending' (propuesta inicial) o
+  // 'countered' (alguien hizo una contrapropuesta). Le toca RESPONDER a quien NO
+  // hizo el último cambio; el último que modificó queda esperando. Si no hay
+  // last_modified_by (datos viejos), el proposer cuenta como autor del último cambio.
+  const negotiationOpen = meetup.status === 'pending' || meetup.status === 'countered';
+  const iAmLastModifier = meetup.last_modified_by
+    ? meetup.last_modified_by === user?.id
+    : isProposer;
+  const canRespond = negotiationOpen && !iAmLastModifier;   // Aceptar / Modificar / Rechazar
+  const canManageOwn = negotiationOpen && iAmLastModifier;  // Modificar / Cancelar (esperando al otro)
   const isConfirmed = meetup.status === 'confirmed';
   const isCompleted = meetup.status === 'completed';
   const canRate = isCompleted && !myRating && !!user && !!otherId;
@@ -264,6 +280,7 @@ export default function EncuentroDetailScreen() {
     const mySide: 'proposer' | 'receiver' = isProposer ? 'proposer' : 'receiver';
 
     await supabase.from('meetups').update({
+      status: 'countered',
       agreed_price: price,
       agreed_price_currency: profile?.currency ?? 'usd',
       agreed_price_payer: price != null ? mySide : null,
@@ -356,7 +373,7 @@ export default function EncuentroDetailScreen() {
     });
     setSubmittingRating(false);
     if (error) {
-      Alert.alert('No se pudo enviar', error.message);
+      dialog.alert({ title: 'No se pudo enviar', message: error.message });
       return;
     }
     setMyRating(ratingChoice);
@@ -375,7 +392,7 @@ export default function EncuentroDetailScreen() {
     });
     if (error) {
       setMessageDraft(body);
-      Alert.alert('No se pudo enviar', error.message);
+      dialog.alert({ title: 'No se pudo enviar', message: error.message });
     }
     setSendingMsg(false);
   }
@@ -387,7 +404,7 @@ export default function EncuentroDetailScreen() {
   return (
     <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.canGoBack() ? router.back() : router.replace('/(tabs)/encuentros')} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+        <TouchableOpacity onPress={() => router.canGoBack() ? router.back() : router.replace('/(tabs)/intercambios')} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
           <Ionicons name="chevron-back" size={24} color={palette.primary} />
         </TouchableOpacity>
         <TouchableOpacity
@@ -423,7 +440,95 @@ export default function EncuentroDetailScreen() {
           <Ionicons name="reader-outline" size={14} color={palette.primary} />
           <Text style={styles.detailBtnText}>Detalle</Text>
         </TouchableOpacity>
+        <TouchableOpacity
+          onPress={() => setShowUserActions(true)}
+          hitSlop={{ top: 10, bottom: 10, left: 6, right: 6 }}
+          style={{ paddingLeft: 10 }}
+          activeOpacity={0.7}
+        >
+          <Ionicons name="ellipsis-vertical" size={18} color={palette.textSecondary} />
+        </TouchableOpacity>
       </View>
+
+      {other && (
+        <BlockReportSheet
+          visible={showUserActions}
+          onClose={() => setShowUserActions(false)}
+          userId={(isProposer ? meetup.receiver_id : meetup.proposer_id) as string}
+          username={other.username}
+          meetupId={typeof id === 'string' ? id : undefined}
+          onBlocked={() => router.replace('/(tabs)/intercambios')}
+        />
+      )}
+
+      {(canRespond || canManageOwn || isConfirmed || isCompleted) && (
+        <View style={styles.actionBar}>
+          {canRate && (
+            <CompactAction icon="thumbs-up-outline" label="Calificar" color={palette.primary} onPress={openRating} disabled={saving} />
+          )}
+          {isCompleted && myRating && (
+            <View style={styles.ratedBadge}>
+              <Ionicons
+                name={myRating === 'positive' ? 'thumbs-up' : 'thumbs-down'}
+                size={14}
+                color={myRating === 'positive' ? palette.successAlt : palette.danger}
+              />
+              <Text style={styles.ratedBadgeText}>
+                Ya calificaste a @{other?.username ?? '—'}
+              </Text>
+            </View>
+          )}
+          {canRespond && (
+            <>
+              <CompactAction icon="checkmark-outline" label="Aceptar" color={palette.success} filled onPress={() => dialog.confirm({
+                title: 'Aceptar intercambio',
+                message: 'Al aceptar, la propuesta queda confirmada y ya no se podrá modificar. ¿Confirmas?',
+                cancelText: 'Cancelar',
+                confirmText: 'Aceptar',
+                onConfirm: () => updateStatus('confirmed'),
+              })} disabled={saving} />
+              <CompactAction icon="git-compare-outline" label="Modificar" color={palette.primary} onPress={openEditModal} disabled={saving} />
+              <CompactAction icon="close-outline" label="Rechazar" color={palette.danger} onPress={() => dialog.confirm({
+                title: 'Rechazar',
+                message: '¿Rechazar este intercambio?',
+                cancelText: 'Cancelar',
+                confirmText: 'Rechazar',
+                destructive: true,
+                onConfirm: () => updateStatus('cancelled'),
+              })} disabled={saving} />
+            </>
+          )}
+          {canManageOwn && (
+            <>
+              <CompactAction icon="git-compare-outline" label="Modificar" color={palette.primary} onPress={openEditModal} disabled={saving} />
+              <CompactAction icon="close-outline" label="Cancelar" color={palette.danger} onPress={() => dialog.confirm({
+                title: 'Cancelar',
+                message: '¿Cancelar este intercambio?',
+                cancelText: 'Volver',
+                confirmText: 'Cancelar intercambio',
+                destructive: true,
+                onConfirm: () => updateStatus('cancelled'),
+              })} disabled={saving} />
+            </>
+          )}
+          {isConfirmed && !myCheckedIn && (
+            <CompactAction icon="qr-code-outline" label="Check-in" color={palette.primary} onPress={() => dialog.confirm({
+              title: 'Hacer check-in',
+              message: 'Confirma que estás en el encuentro con la otra persona. Cuando ambos hagan check-in, las cartas se transfieren y el intercambio se completa. Esto no se puede deshacer.',
+              cancelText: 'Todavía no',
+              confirmText: 'Hacer check-in',
+              destructive: true,
+              onConfirm: checkIn,
+            })} disabled={saving} />
+          )}
+          {isConfirmed && myCheckedIn && (
+            <View style={styles.checkedInCompact}>
+              <Ionicons name="checkmark-circle" size={14} color={palette.successAlt} />
+              <Text style={styles.checkedInCompactText}>Check-in registrado — esperando al otro</Text>
+            </View>
+          )}
+        </View>
+      )}
 
       <KeyboardAvoidingView
         style={{ flex: 1 }}
@@ -475,56 +580,8 @@ export default function EncuentroDetailScreen() {
           )}
         </ScrollView>
 
-        {(canRespond || canEdit || isConfirmed || isCompleted) && (
-          <View style={styles.actionBar}>
-            {canRate && (
-              <CompactAction icon="thumbs-up-outline" label="Calificar" color={palette.primary} onPress={openRating} disabled={saving} />
-            )}
-            {isCompleted && myRating && (
-              <View style={styles.ratedBadge}>
-                <Ionicons
-                  name={myRating === 'positive' ? 'thumbs-up' : 'thumbs-down'}
-                  size={14}
-                  color={myRating === 'positive' ? palette.successAlt : palette.danger}
-                />
-                <Text style={styles.ratedBadgeText}>
-                  Ya calificaste a @{other?.username ?? '—'}
-                </Text>
-              </View>
-            )}
-            {canRespond && (
-              <>
-                <CompactAction icon="checkmark-outline" label="Aceptar" color={palette.success} onPress={() => updateStatus('confirmed')} disabled={saving} />
-                <CompactAction icon="git-compare-outline" label="Modificar" color={palette.primary} onPress={openEditModal} disabled={saving} />
-                <CompactAction icon="close-outline" label="Rechazar" color={palette.danger} onPress={() => Alert.alert('Rechazar', '¿Rechazar este intercambio?', [
-                  { text: 'Cancelar', style: 'cancel' },
-                  { text: 'Rechazar', style: 'destructive', onPress: () => updateStatus('cancelled') },
-                ])} disabled={saving} />
-              </>
-            )}
-            {isProposer && canEdit && (
-              <>
-                <CompactAction icon="git-compare-outline" label="Modificar" color={palette.primary} onPress={openEditModal} disabled={saving} />
-                <CompactAction icon="close-outline" label="Cancelar" color={palette.danger} onPress={() => Alert.alert('Cancelar', '¿Cancelar este intercambio?', [
-                  { text: 'Volver', style: 'cancel' },
-                  { text: 'Cancelar intercambio', style: 'destructive', onPress: () => updateStatus('cancelled') },
-                ])} disabled={saving} />
-              </>
-            )}
-            {isConfirmed && !myCheckedIn && (
-              <CompactAction icon="qr-code-outline" label="Check-in" color={palette.primary} onPress={checkIn} disabled={saving} />
-            )}
-            {isConfirmed && myCheckedIn && (
-              <View style={styles.checkedInCompact}>
-                <Ionicons name="checkmark-circle" size={14} color={palette.successAlt} />
-                <Text style={styles.checkedInCompactText}>Check-in registrado — esperando al otro</Text>
-              </View>
-            )}
-          </View>
-        )}
-
         {chatEnabled && (
-          <View style={styles.inputBar}>
+          <View style={[styles.inputBar, { paddingBottom: Math.max(insets.bottom, 10) }]}>
             <TextInput
               style={styles.chatInput}
               value={messageDraft}
@@ -702,20 +759,25 @@ export default function EncuentroDetailScreen() {
   );
 }
 
-function CompactAction({ icon, label, color, onPress, disabled }: {
+function CompactAction({ icon, label, color, onPress, disabled, filled }: {
   icon: any; label: string; color: string;
-  onPress: () => void; disabled?: boolean;
+  onPress: () => void; disabled?: boolean; filled?: boolean;
 }) {
   const styles = useStyles();
+  const fg = filled ? '#fff' : color;
   return (
     <TouchableOpacity
-      style={[styles.compactAction, { borderColor: color + '55' }, disabled && { opacity: 0.5 }]}
+      style={[
+        styles.compactAction,
+        filled ? { backgroundColor: color, borderColor: color } : { borderColor: color + '55' },
+        disabled && { opacity: 0.5 },
+      ]}
       onPress={onPress}
       disabled={disabled}
       activeOpacity={0.7}
     >
-      <Ionicons name={icon} size={14} color={color} />
-      <Text style={[styles.compactActionText, { color }]} numberOfLines={1}>{label}</Text>
+      <Ionicons name={icon} size={15} color={fg} />
+      <Text style={[styles.compactActionText, { color: fg }]} numberOfLines={1}>{label}</Text>
     </TouchableOpacity>
   );
 }
@@ -908,7 +970,7 @@ function SummaryModal({
               <View style={styles.summaryDetailRow}>
                 <Ionicons name="wallet-outline" size={16} color={palette.successAlt} />
                 <Text style={styles.summaryDetailLabel}>Precio acordado</Text>
-                <Text style={styles.summaryDetailValue}>${price} {priceCurrency.toUpperCase()}</Text>
+                <Text style={styles.summaryDetailValue}>{formatCurrencyValue(price, priceCurrency)} {priceCurrency.toUpperCase()}</Text>
               </View>
             </View>
           )}
@@ -979,7 +1041,7 @@ function ParticipantCard({ user, role, cards, price, priceCurrency, onZoom }: {
           {price != null && (
             <View style={styles.participantPriceRow}>
               <Ionicons name="wallet-outline" size={16} color={palette.successAlt} />
-              <Text style={styles.participantPriceText}>${price} {priceCurrency.toUpperCase()}</Text>
+              <Text style={styles.participantPriceText}>{formatCurrencyValue(price, priceCurrency)} {priceCurrency.toUpperCase()}</Text>
             </View>
           )}
         </>
@@ -1191,14 +1253,14 @@ const useStyles = makeStyles((p) => ({
   zoomCaptionSet: { color: p.textSecondary, fontSize: 13, marginTop: 4 },
 
   actionBar: {
-    flexDirection: 'row', gap: 6,
-    paddingHorizontal: 10, paddingVertical: 8,
-    borderTopWidth: 1, borderTopColor: p.surface,
+    flexDirection: 'row', gap: 10,
+    paddingHorizontal: 12, paddingVertical: 10,
+    borderBottomWidth: 1, borderBottomColor: p.surface,
     backgroundColor: p.bg,
   },
   compactAction: {
     flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 5,
-    paddingHorizontal: 8, paddingVertical: 8,
+    paddingHorizontal: 8, paddingVertical: 11, minHeight: 44,
     borderRadius: 10, borderWidth: 1, backgroundColor: p.surface,
   },
   compactActionText: { fontSize: 12, fontWeight: '700' },

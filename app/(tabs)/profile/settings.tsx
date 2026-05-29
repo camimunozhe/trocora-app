@@ -9,6 +9,7 @@ import { useDialog } from '@/lib/AppDialog';
 import { usePremium } from '@/lib/usePremium';
 import { GAME_DISPLAY_NAMES, resolveEnabledGames } from '@/lib/enabledGames';
 import { makeStyles } from '@/lib/theme';
+import { useTabBarClearance } from '@/lib/useTabBarClearance';
 
 const THEME_LABEL: Record<'light' | 'dark' | 'system', string> = {
   system: 'Sistema',
@@ -23,6 +24,7 @@ export default function SettingsScreen() {
   const { palette, preference } = useTheme();
   const premium = usePremium();
   const styles = useStyles();
+  const tabBarClearance = useTabBarClearance();
 
   function handleSignOut() {
     dialog.confirm({
@@ -45,7 +47,7 @@ export default function SettingsScreen() {
         <View style={{ width: 24 }} />
       </View>
 
-      <ScrollView>
+      <ScrollView contentContainerStyle={{ paddingBottom: tabBarClearance }}>
         <TouchableOpacity
           style={styles.proCard}
           activeOpacity={0.85}
@@ -155,6 +157,13 @@ export default function SettingsScreen() {
                 <Text style={styles.menuItemText}>{user?.email}</Text>
               </View>
             </View>
+            <TouchableOpacity style={styles.menuItem} onPress={() => router.push('/(tabs)/profile/support')}>
+              <View style={styles.menuItemContent}>
+                <Ionicons name="help-circle-outline" size={18} color={palette.textSecondary} />
+                <Text style={styles.menuItemText}>Soporte</Text>
+              </View>
+              <Ionicons name="chevron-forward" size={18} color={palette.textMuted} />
+            </TouchableOpacity>
             <TouchableOpacity style={[styles.menuItem, styles.menuItemLast]} onPress={() => router.push('/(tabs)/profile/privacy')}>
               <View style={styles.menuItemContent}>
                 <Ionicons name="lock-closed-outline" size={18} color={palette.textSecondary} />

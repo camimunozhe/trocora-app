@@ -21,9 +21,10 @@ app/
   (auth)/           # Login / signup
   (tabs)/
     collection/     # Mi colección, folders, agregar cartas
-    discover/       # Explorar cartas de otros usuarios (entry point a los trades)
-    encuentros/     # Trades / encuentros — index, [id] con chat, nueva
+    explorar/       # Explorar cartas de otros usuarios (entry point a los trades)
+    intercambios/   # Lista de trades del usuario
     profile/
+  intercambio/      # Detalle [id] (chat) y alta (nueva) de un trade — fuera de (tabs)
   _layout.tsx       # RootNavigator: redirige según session, registra push token
 context/AuthContext.tsx
 lib/
@@ -31,7 +32,7 @@ lib/
   usePushTokenRegistration.ts       # Hook que upsertea Expo push token
   DateTimePicker.tsx                # Pickers reutilizables
   AppDialog.tsx                     # Modal de diálogo temático (reemplaza Alert nativos)
-  enabledGames.ts, cardPrice.ts, cardStyle.ts
+  enabledGames.ts, cardPrice.ts, theme.ts
 types/database.ts                   # Interfaces TS + Database type para supabase-js
 migrations/                         # SQL plano, una sentencia o conjunto idempotente por archivo
 supabase/functions/notify/index.ts  # Edge function para push (webhooks de INSERT)
@@ -63,7 +64,7 @@ Project ref de Supabase: `ujcwxvzesjtmzcpyvqdo`. RLS está habilitado en todas l
 
 Tablas principales:
 - `profiles` — usuarios (FK a `auth.users`)
-- `cards_collection` — inventario por usuario, marcable `is_for_trade` / `is_for_sale`
+- `cards_collection` — inventario por usuario, publicable con `is_published` (disponibilidad). El modo trade/venta se acuerda en el chat vía `meetups.kind`
 - `collection_folders` — agrupación por usuario
 - `meetups` — núcleo de los trades. Status: `pending` → `countered` → `confirmed` → `completed` / `cancelled`. `scheduled_at`, `custom_location`, `agreed_price` son **nullable** porque se acuerdan en chat
 - `meetup_cards` — N:N de cartas en un meetup, con `side: 'proposer' | 'receiver'`
@@ -71,6 +72,8 @@ Tablas principales:
 - `safe_zones` — lugares verificados sugeridos
 - `messages` — chat in-app por meetup, inmutable (sin UPDATE/DELETE policy), expuesto vía Realtime
 - `push_tokens` — Expo push tokens por usuario, único por token, RLS solo permite ver/editar los propios
+- `user_blocks` — bloqueos entre usuarios (`blocker_id` bloquea a `blocked_id`, direccional). RLS: cada quien ve/inserta/borra solo los propios
+- `user_reports` — reportes de usuarios para moderación (`reason`, `status`, `meetup_id` opcional). RLS: insert/select propios
 - Tablas catálogo: `pokemon_sets/cards`, `magic_sets/cards` + price history
 
 RPC:
@@ -84,8 +87,8 @@ Archivos SQL planos en `migrations/`, nombrados `YYYY_MM_<descripcion>.sql`. Ide
 
 ## Flujo de trade actual
 
-1. Usuario A toca una carta en **Discover** → modal con detalle → "Proponer encuentro"
-2. `encuentros/nueva.tsx` (pantalla lineal): la carta inicial viene pre-seleccionada, A puede agregar más cartas del mismo dueño + tipo (trade/purchase) + nota → envía
+1. Usuario A toca una carta en **Explorar** → modal con detalle → "Proponer encuentro"
+2. `intercambio/nueva.tsx` (pantalla lineal): la carta inicial viene pre-seleccionada, A puede agregar más cartas del mismo dueño + tipo (trade/purchase) + nota → envía
 3. Edge function `notify` dispara push al receiver
 4. Receiver abre el trade → ve **chat in-app con Realtime** y los detalles arriba
 5. Cualquiera abre "Modificar propuesta" → ajusta cartas, precio, **fecha**, **hora**, **lugar** → `status: countered`

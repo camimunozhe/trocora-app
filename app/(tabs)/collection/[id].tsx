@@ -2,7 +2,7 @@ import { useEffect, useState, useCallback, useRef } from 'react';
 import {
   View, Text, TouchableOpacity,
   ScrollView, ActivityIndicator, Modal, FlatList,
-  TextInput, Switch, KeyboardAvoidingView, Platform,
+  Switch, KeyboardAvoidingView, Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useDialog } from '@/lib/AppDialog';
@@ -19,11 +19,13 @@ import { uploadCardPhoto, deleteCardPhoto, MAX_CUSTOM_PHOTOS } from '@/lib/cardP
 import { PhotoLightbox } from '@/lib/PhotoLightbox';
 import * as ImagePicker from 'expo-image-picker';
 import type { CardCollection, CollectionFolder, TCGGame, CardLanguage } from '@/types/database';
-import { formatPrice, currencyLabel, convertCurrency } from '@/lib/currency';
+import { formatPrice, formatCurrencyValue, currencyLabel, convertCurrency } from '@/lib/currency';
 import { getUsdToClp } from '@/lib/exchangeRate';
 import { validateFolderGame, gameLabel } from '@/lib/folderValidation';
 import { marketPriceUsd, type CardWithCatalog } from '@/lib/cardPrice';
+import { PublishPriceModal } from '@/lib/PublishPriceModal';
 import { makeStyles } from '@/lib/theme';
+import { useTabBarClearance } from '@/lib/useTabBarClearance';
 
 type IoniconName = React.ComponentProps<typeof Ionicons>['name'];
 
@@ -77,6 +79,7 @@ export default function CardDetailScreen() {
   const router = useRouter();
   const dialog = useDialog();
   const styles = useStyles();
+  const tabBarClearance = useTabBarClearance();
   type CardWithPrice = CardWithCatalog;
   const [card, setCard] = useState<CardWithPrice | null>(null);
   const [folders, setFolders] = useState<CollectionFolder[]>([]);
@@ -85,9 +88,10 @@ export default function CardDetailScreen() {
   const [showConditionPicker, setShowConditionPicker] = useState(false);
   const [showLanguagePicker, setShowLanguagePicker] = useState(false);
   const [imageZoom, setImageZoom] = useState(false);
-  const [priceInput, setPriceInput] = useState('');
-  const [priceSaving, setPriceSaving] = useState(false);
   const [usdToClp, setUsdToClp] = useState<number | null>(null);
+  const [showPriceModal, setShowPriceModal] = useState(false);
+  const [priceModalSaving, setPriceModalSaving] = useState(false);
+  const [pendingPublish, setPendingPublish] = useState(false);
   const qtySaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const qtyTargetRef = useRef<number | null>(null);
 
@@ -119,16 +123,6 @@ export default function CardDetailScreen() {
     });
     return () => { mounted = false; };
   }, [currency]);
-
-  useEffect(() => {
-    if (!card) return;
-    const val = card.price_reference;
-    if (val == null) { setPriceInput(''); return; }
-    const displayVal = convertCurrency(val, card.price_reference_currency, currency, usdToClp ?? 950);
-    setPriceInput(currency === 'clp'
-      ? String(Math.round(displayVal))
-      : (displayVal % 1 === 0 ? String(displayVal) : displayVal.toFixed(2)));
-  }, [card?.id, currency, usdToClp]);
 
   async function handleDelete() {
     dialog.confirm({
@@ -185,24 +179,35 @@ export default function CardDetailScreen() {
     patchCollectionCard(id, { [field]: value });
   }
 
-  async function savePrice() {
-    setPriceSaving(true);
-    const inputNum = priceInput.trim() ? parseFloat(priceInput) : null;
-    const storeVal = inputNum !== null && !isNaN(inputNum) ? inputNum : null;
-    const update = { price_reference: storeVal, price_reference_currency: currency };
+  function openPriceModal(forPublish: boolean) {
+    setPendingPublish(forPublish);
+    setShowPriceModal(true);
+  }
+
+  // Al activar "Publicar": pasa el gate de límites y luego pide el precio.
+  async function requestPublish() {
+    if (user) {
+      const ok = await assertCanPublish({
+        userId: user.id, isPremium, addCount: 1, dialog,
+        onUpgrade: () => router.push('/paywall'),
+      });
+      if (!ok) return;
+    }
+    openPriceModal(true);
+  }
+
+  async function confirmPrice(price: number) {
+    setPriceModalSaving(true);
+    const update: Partial<Omit<CardCollection, 'id' | 'user_id' | 'created_at'>> = {
+      price_reference: price,
+      price_reference_currency: currency,
+    };
+    if (pendingPublish) update.is_published = true;
     await supabase.from('cards_collection').update(update).eq('id', id);
     setCard(c => c ? { ...c, ...update } : c);
     patchCollectionCard(id, update);
-    setPriceSaving(false);
-  }
-
-  async function clearToMarketPrice() {
-    setPriceInput('');
-    setPriceSaving(true);
-    await supabase.from('cards_collection').update({ price_reference: null }).eq('id', id);
-    setCard(c => c ? { ...c, price_reference: null } : c);
-    patchCollectionCard(id, { price_reference: null });
-    setPriceSaving(false);
+    setPriceModalSaving(false);
+    setShowPriceModal(false);
   }
 
   async function saveCondition(condition: import('@/types/database').CardCondition) {
@@ -279,7 +284,7 @@ export default function CardDetailScreen() {
         style={{ flex: 1 }}
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       >
-      <ScrollView style={styles.scroll} keyboardShouldPersistTaps="handled">
+      <ScrollView style={styles.scroll} contentContainerStyle={{ paddingBottom: tabBarClearance }} keyboardShouldPersistTaps="handled">
         <View style={styles.heroCard}>
           {card.image_url ? (
             <TouchableOpacity onPress={() => setImageZoom(true)} activeOpacity={0.85}>
@@ -336,6 +341,9 @@ export default function CardDetailScreen() {
           </TouchableOpacity>
           {(() => {
             const marketPrice = marketPriceUsd(card);
+            const saleInCurrency = card.price_reference != null
+              ? convertCurrency(card.price_reference, card.price_reference_currency, currency, usdToClp ?? 950)
+              : (marketPrice != null ? convertCurrency(marketPrice, 'usd', currency, usdToClp ?? 950) : null);
             return (
               <View style={styles.priceBlock}>
                 {marketPrice != null && (
@@ -346,37 +354,17 @@ export default function CardDetailScreen() {
                     </Text>
                   </View>
                 )}
-                <View style={styles.myPriceRow}>
-                  <Text style={styles.detailLabel}>Tu precio ({currencyLabel(currency)})</Text>
-                  <View style={styles.myPriceInputRow}>
-                    <Text style={styles.currencySymbol}>$</Text>
-                    <TextInput
-                      style={styles.priceInput}
-                      value={priceInput}
-                      onChangeText={setPriceInput}
-                      keyboardType="decimal-pad"
-                      placeholder={marketPrice != null
-                        ? (currency === 'clp'
-                            ? String(Math.round(marketPrice * (usdToClp ?? 950)))
-                            : (marketPrice % 1 === 0 ? String(marketPrice) : marketPrice.toFixed(2)))
-                        : (currency === 'clp' ? '0' : '0.00')}
-                      placeholderTextColor={palette.textMuted}
-                      returnKeyType="done"
-                      onSubmitEditing={savePrice}
-                      selectionColor={palette.primary}
-                      underlineColorAndroid="transparent"
-                    />
-                    <TouchableOpacity onPress={savePrice} disabled={priceSaving} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-                      {priceSaving
-                        ? <ActivityIndicator size="small" color={palette.textSecondary} />
-                        : <Ionicons name="checkmark-circle-outline" size={22} color={palette.primary} />}
-                    </TouchableOpacity>
-                  </View>
-                </View>
-                {marketPrice != null && card.price_reference != null && (
-                  <TouchableOpacity style={styles.useMarketRow} onPress={clearToMarketPrice}>
-                    <Ionicons name="trending-up-outline" size={13} color={palette.primary} />
-                    <Text style={styles.useMarketText}>Usar precio de mercado</Text>
+                {card.is_published && (
+                  <TouchableOpacity style={styles.myPriceRow} onPress={() => openPriceModal(false)}>
+                    <Text style={styles.detailLabel}>Precio de venta</Text>
+                    <View style={styles.folderValue}>
+                      <Text style={styles.marketValue}>
+                        {saleInCurrency != null
+                          ? `${formatCurrencyValue(saleInCurrency, currency)} ${currencyLabel(currency)}`
+                          : 'Definir'}
+                      </Text>
+                      <Ionicons name="chevron-forward-outline" size={14} color={palette.textMuted} />
+                    </View>
                   </TouchableOpacity>
                 )}
               </View>
@@ -417,7 +405,7 @@ export default function CardDetailScreen() {
             </View>
             <Switch
               value={card.is_published}
-              onValueChange={v => toggleField('is_published', v)}
+              onValueChange={v => (v ? requestPublish() : toggleField('is_published', false))}
               trackColor={{ true: palette.primary }}
             />
           </View>
@@ -541,6 +529,17 @@ export default function CardDetailScreen() {
           </View>
         </TouchableOpacity>
       </Modal>
+
+      <PublishPriceModal
+        visible={showPriceModal}
+        card={card}
+        currency={currency}
+        usdToClp={usdToClp ?? 950}
+        mode={pendingPublish ? 'publish' : 'edit'}
+        saving={priceModalSaving}
+        onCancel={() => setShowPriceModal(false)}
+        onConfirm={confirmPrice}
+      />
 
       <Modal visible={imageZoom} transparent animationType="fade" onRequestClose={() => setImageZoom(false)}>
         <TouchableOpacity style={styles.zoomOverlay} activeOpacity={1} onPress={() => setImageZoom(false)}>

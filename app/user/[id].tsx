@@ -8,6 +8,7 @@ import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/context/AuthContext';
 import { useTheme } from '@/context/ThemeContext';
 import { ProBadge } from '@/lib/ProBadge';
+import { BlockReportSheet } from '@/lib/BlockReportSheet';
 import { makeStyles } from '@/lib/theme';
 import type { Profile } from '@/types/database';
 
@@ -34,6 +35,7 @@ export default function UserProfileScreen() {
   const [meetupCount, setMeetupCount] = useState(0);
   const [breakdown, setBreakdown] = useState<GameBreakdown | null>(null);
   const [loading, setLoading] = useState(true);
+  const [showActions, setShowActions] = useState(false);
 
   useEffect(() => {
     if (!id) return;
@@ -105,7 +107,9 @@ export default function UserProfileScreen() {
           <Ionicons name="chevron-back" size={24} color={palette.primary} />
         </TouchableOpacity>
         <Text style={styles.headerTitle} numberOfLines={1}>@{profile.username}</Text>
-        <View style={{ width: 24 }} />
+        <TouchableOpacity onPress={() => setShowActions(true)} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+          <Ionicons name="ellipsis-vertical" size={22} color={palette.textSecondary} />
+        </TouchableOpacity>
       </View>
 
       <ScrollView>
@@ -187,6 +191,14 @@ export default function UserProfileScreen() {
 
         <View style={{ height: 32 }} />
       </ScrollView>
+
+      <BlockReportSheet
+        visible={showActions}
+        onClose={() => setShowActions(false)}
+        userId={profile.id}
+        username={profile.username}
+        onBlocked={() => router.back()}
+      />
     </SafeAreaView>
   );
 }

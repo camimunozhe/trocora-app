@@ -1,28 +1,30 @@
 import { useState } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity, Image,
-  Alert, KeyboardAvoidingView, Platform, ScrollView,
+  KeyboardAvoidingView, Platform, ScrollView,
 } from 'react-native';
 import { Link } from 'expo-router';
 import { supabase } from '@/lib/supabase';
 import { useTheme } from '@/context/ThemeContext';
 import { makeStyles } from '@/lib/theme';
+import { useDialog } from '@/lib/AppDialog';
 
 export default function LoginScreen() {
   const { palette } = useTheme();
   const styles = useStyles();
+  const dialog = useDialog();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
 
   async function handleLogin() {
     if (!email || !password) {
-      Alert.alert('Error', 'Completa todos los campos');
+      dialog.alert({ title: 'Error', message: 'Completa todos los campos' });
       return;
     }
     setLoading(true);
     const { error } = await supabase.auth.signInWithPassword({ email, password });
-    if (error) Alert.alert('Error', error.message);
+    if (error) dialog.alert({ title: 'Error', message: error.message });
     setLoading(false);
   }
 
@@ -60,6 +62,12 @@ export default function LoginScreen() {
             placeholderTextColor={palette.textMuted}
             secureTextEntry
           />
+
+          <View style={styles.forgotRow}>
+            <Link href="/(auth)/forgot-password">
+              <Text style={styles.forgotLink}>¿Olvidaste tu contraseña?</Text>
+            </Link>
+          </View>
 
           <TouchableOpacity
             style={[styles.btn, loading && styles.btnDisabled]}
@@ -99,6 +107,8 @@ const useStyles = makeStyles((p) => ({
     fontSize: 16,
     color: p.textPrimary,
   },
+  forgotRow: { alignItems: 'flex-end', marginTop: 12 },
+  forgotLink: { color: p.primary, fontSize: 13, fontWeight: '600' },
   btn: {
     backgroundColor: p.primary,
     borderRadius: 12,

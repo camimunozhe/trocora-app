@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { View, Text, TouchableOpacity, Alert, ScrollView } from 'react-native';
+import { View, Text, TouchableOpacity, ScrollView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -8,13 +8,17 @@ import { useAuth } from '@/context/AuthContext';
 import { useTheme } from '@/context/ThemeContext';
 import { GAME_DISPLAY_NAMES, resolveEnabledGames } from '@/lib/enabledGames';
 import { makeStyles } from '@/lib/theme';
+import { useDialog } from '@/lib/AppDialog';
+import { useTabBarClearance } from '@/lib/useTabBarClearance';
 import type { TCGGame } from '@/types/database';
 
 export default function GamesScreen() {
   const { user, profile, refreshProfile } = useAuth();
   const { palette } = useTheme();
   const router = useRouter();
+  const dialog = useDialog();
   const styles = useStyles();
+  const tabBarClearance = useTabBarClearance();
   const [saving, setSaving] = useState(false);
 
   const enabled = resolveEnabledGames(profile?.enabled_games);
@@ -23,13 +27,13 @@ export default function GamesScreen() {
     if (saving) return;
     const next = enabled.includes(game) ? enabled.filter(g => g !== game) : [...enabled, game];
     if (next.length === 0) {
-      Alert.alert('Selecciona al menos uno', 'Necesitas tener al menos un juego habilitado.');
+      dialog.alert({ title: 'Selecciona al menos uno', message: 'Necesitas tener al menos un juego habilitado.' });
       return;
     }
     setSaving(true);
     const { error } = await supabase.from('profiles').update({ enabled_games: next }).eq('id', user!.id);
     if (error) {
-      Alert.alert('No se pudo guardar', error.message);
+      dialog.alert({ title: 'No se pudo guardar', message: error.message });
       setSaving(false);
       return;
     }
@@ -48,7 +52,7 @@ export default function GamesScreen() {
         <View style={{ width: 60 }} />
       </View>
 
-      <ScrollView contentContainerStyle={styles.scroll}>
+      <ScrollView contentContainerStyle={[styles.scroll, { paddingBottom: tabBarClearance }]}>
         <Text style={styles.intro}>
           Elige los juegos que coleccionas. Solo se muestran en tu colección, en explorar y al agregar cartas. Puedes cambiarlo cuando quieras — no se borra ningún dato.
         </Text>

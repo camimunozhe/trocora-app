@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { View, Text, TouchableOpacity, Alert, ScrollView } from 'react-native';
+import { View, Text, TouchableOpacity, ScrollView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -7,6 +7,8 @@ import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/context/AuthContext';
 import { useTheme } from '@/context/ThemeContext';
 import { makeStyles } from '@/lib/theme';
+import { useDialog } from '@/lib/AppDialog';
+import { useTabBarClearance } from '@/lib/useTabBarClearance';
 import type { Currency } from '@/types/database';
 
 const OPTIONS: { value: Currency; label: string; desc: string }[] = [
@@ -18,7 +20,9 @@ export default function CurrencyScreen() {
   const { user, profile, refreshProfile } = useAuth();
   const { palette } = useTheme();
   const router = useRouter();
+  const dialog = useDialog();
   const styles = useStyles();
+  const tabBarClearance = useTabBarClearance();
   const [saving, setSaving] = useState(false);
   const current: Currency = profile?.currency ?? 'usd';
 
@@ -27,7 +31,7 @@ export default function CurrencyScreen() {
     setSaving(true);
     const { error } = await supabase.from('profiles').update({ currency: value }).eq('id', user!.id);
     if (error) {
-      Alert.alert('No se pudo guardar', error.message);
+      dialog.alert({ title: 'No se pudo guardar', message: error.message });
       setSaving(false);
       return;
     }
@@ -46,7 +50,7 @@ export default function CurrencyScreen() {
         <View style={{ width: 60 }} />
       </View>
 
-      <ScrollView contentContainerStyle={styles.scroll}>
+      <ScrollView contentContainerStyle={[styles.scroll, { paddingBottom: tabBarClearance }]}>
         <Text style={styles.intro}>
           Elige la moneda en la que quieres ver y registrar los precios de tus cartas.
         </Text>

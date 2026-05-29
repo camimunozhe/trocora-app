@@ -7,6 +7,7 @@ import { useAuth } from '@/context/AuthContext';
 import { useTheme } from '@/context/ThemeContext';
 import { useDialog } from '@/lib/AppDialog';
 import { makeStyles } from '@/lib/theme';
+import { useTabBarClearance } from '@/lib/useTabBarClearance';
 
 export default function PrivacyScreen() {
   const { signOut } = useAuth();
@@ -14,6 +15,7 @@ export default function PrivacyScreen() {
   const router = useRouter();
   const dialog = useDialog();
   const styles = useStyles();
+  const tabBarClearance = useTabBarClearance();
 
   function handleDeleteAccount() {
     dialog.confirm({
@@ -48,7 +50,7 @@ export default function PrivacyScreen() {
         <View style={{ width: 60 }} />
       </View>
 
-      <ScrollView contentContainerStyle={styles.scroll}>
+      <ScrollView contentContainerStyle={[styles.scroll, { paddingBottom: tabBarClearance }]}>
         <Text style={styles.sectionLabel}>Tus datos</Text>
         <View style={styles.card}>
           <Text style={styles.cardText}>
