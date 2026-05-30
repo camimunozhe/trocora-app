@@ -15,8 +15,6 @@ export default function ProfileLayout() {
       <Stack.Screen name="support" />
       <Stack.Screen name="blocked" />
       <Stack.Screen name="stats" />
-      <Stack.Screen name="watchlist" />
-      <Stack.Screen name="watchlist-add" />
     </Stack>
   );
 }

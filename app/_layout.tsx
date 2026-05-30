@@ -109,6 +109,10 @@ function RootNavigator() {
       <Stack.Screen name="user/[id]" options={{ presentation: 'card', animation: 'slide_from_right' }} />
       <Stack.Screen name="intercambio/[id]" options={{ presentation: 'card', animation: 'slide_from_right' }} />
       <Stack.Screen name="intercambio/nueva" options={{ presentation: 'card', animation: 'slide_from_right' }} />
+      <Stack.Screen name="catalog" options={{ presentation: 'card', animation: 'slide_from_right' }} />
+      <Stack.Screen name="catalog-set" options={{ presentation: 'card', animation: 'slide_from_right' }} />
+      <Stack.Screen name="watchlist" options={{ presentation: 'card', animation: 'slide_from_right' }} />
+      <Stack.Screen name="watchlist-add" options={{ presentation: 'card', animation: 'slide_from_right' }} />
       <Stack.Screen name="paywall" options={{ presentation: 'modal', animation: 'slide_from_bottom' }} />
     </Stack>
   );

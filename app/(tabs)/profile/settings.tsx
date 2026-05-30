@@ -77,12 +77,22 @@ export default function SettingsScreen() {
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Trocora Pro</Text>
           <View style={styles.list}>
-            <TouchableOpacity style={[styles.menuItem, styles.menuItemLast]} onPress={() => router.push('/(tabs)/profile/watchlist')}>
+            <TouchableOpacity style={styles.menuItem} onPress={() => router.push('/watchlist')}>
               <View style={styles.menuItemContent}>
                 <Ionicons name="heart-outline" size={18} color={palette.warning} />
                 <View style={{ flex: 1 }}>
                   <Text style={styles.menuItemText}>Watchlist y alertas</Text>
                   <Text style={styles.menuItemSub}>Cartas que quieres conseguir</Text>
+                </View>
+              </View>
+              <Ionicons name="chevron-forward" size={18} color={palette.textMuted} />
+            </TouchableOpacity>
+            <TouchableOpacity style={[styles.menuItem, styles.menuItemLast]} onPress={() => router.push('/catalog')}>
+              <View style={styles.menuItemContent}>
+                <Ionicons name="layers-outline" size={18} color={palette.warning} />
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.menuItemText}>Catálogo de sets</Text>
+                  <Text style={styles.menuItemSub}>Explora sets y precios sin agregar</Text>
                 </View>
               </View>
               <Ionicons name="chevron-forward" size={18} color={palette.textMuted} />

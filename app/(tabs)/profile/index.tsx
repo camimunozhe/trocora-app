@@ -123,13 +123,11 @@ export default function ProfileScreen() {
 
   return (
     <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
-      <View style={styles.topBar}>
-        <View style={{ width: 36 }} />
-        <Text style={styles.topBarTitle}>Perfil</Text>
+      <View style={styles.header}>
+        <Text style={styles.title}>Perfil</Text>
         <TouchableOpacity
           onPress={() => router.push('/(tabs)/profile/settings')}
           hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-          style={styles.settingsBtn}
         >
           <Ionicons name="settings-outline" size={22} color={palette.textSecondary} />
         </TouchableOpacity>
@@ -238,12 +236,11 @@ function StatBox({ label, value, sub }: { label: string; value: string; sub?: st
 const useStyles = makeStyles((p) => ({
   container: { flex: 1, backgroundColor: p.bg },
 
-  topBar: {
+  header: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    paddingHorizontal: 16, paddingVertical: 10,
+    padding: 20, paddingTop: 16,
   },
-  topBarTitle: { color: p.textPrimary, fontSize: 16, fontWeight: '700' },
-  settingsBtn: { width: 36, alignItems: 'flex-end' },
+  title: { fontSize: 24, fontWeight: '800', color: p.textPrimary },
 
   hero: { alignItems: 'center', padding: 24, paddingTop: 8, paddingBottom: 16 },
   avatarWrap: { position: 'relative', marginBottom: 12 },

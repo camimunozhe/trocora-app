@@ -40,8 +40,8 @@ type Page =
   | { page: 'search-name'; game: TCGGame };
 
 const GAMES: { value: TCGGame; label: string; icon: IoniconName; color: string; image?: ReturnType<typeof require> }[] = [
-  { value: 'pokemon', label: 'Pokémon', icon: 'flash-outline', color: '#FACC15', image: require('../../../assets/pokemon-tcg-logo.png') },
-  { value: 'magic', label: 'Magic', icon: 'color-wand-outline', color: '#A78BFA', image: require('../../../assets/magic-tcg-logo.png') },
+  { value: 'pokemon', label: 'Pokémon', icon: 'flash-outline', color: '#FACC15', image: require('../assets/pokemon-tcg-logo.png') },
+  { value: 'magic', label: 'Magic', icon: 'color-wand-outline', color: '#A78BFA', image: require('../assets/magic-tcg-logo.png') },
 ];
 
 const CARD_WIDTH = (Dimensions.get('window').width - 16 - 24) / 3;

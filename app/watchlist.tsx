@@ -95,7 +95,7 @@ export default function WatchlistScreen() {
 
   return (
     <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
-      <Header onBack={() => router.back()} onAdd={() => router.push('/(tabs)/profile/watchlist-add')} />
+      <Header onBack={() => router.back()} onAdd={() => router.push('/watchlist-add')} />
       {loading ? (
         <ActivityIndicator style={{ flex: 1 }} color={palette.textSecondary} />
       ) : entries.length === 0 ? (

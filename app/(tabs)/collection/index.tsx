@@ -502,6 +502,21 @@ export default function CollectionScreen() {
         )}
       </View>
 
+      {!selectionMode && (
+        <View style={styles.shortcuts}>
+          {isPremium && (
+            <TouchableOpacity style={styles.shortcut} onPress={() => router.push('/watchlist')} activeOpacity={0.7}>
+              <Ionicons name="heart-outline" size={16} color={palette.warning} />
+              <Text style={styles.shortcutText}>Watchlist</Text>
+            </TouchableOpacity>
+          )}
+          <TouchableOpacity style={styles.shortcut} onPress={() => router.push('/catalog')} activeOpacity={0.7}>
+            <Ionicons name="layers-outline" size={16} color={palette.warning} />
+            <Text style={styles.shortcutText}>Catálogo</Text>
+          </TouchableOpacity>
+        </View>
+      )}
+
       {loading || authLoading || !rateReady ? (
         <ActivityIndicator style={{ flex: 1 }} color={palette.textSecondary} />
       ) : (
@@ -1125,6 +1140,13 @@ const useStyles = makeStyles((p) => ({
   subtitle: { fontSize: 13, color: p.textMuted, marginTop: 2 },
   addBtn: { backgroundColor: p.primary, borderRadius: 10, paddingHorizontal: 14, paddingVertical: 8 },
   addBtnText: { color: '#fff', fontSize: 14, fontWeight: '700' },
+  shortcuts: { flexDirection: 'row', gap: 8, paddingHorizontal: 16, paddingBottom: 8 },
+  shortcut: {
+    flexDirection: 'row', alignItems: 'center', gap: 6,
+    paddingHorizontal: 12, paddingVertical: 8, borderRadius: 20,
+    borderWidth: 1, borderColor: p.border, backgroundColor: p.surface,
+  },
+  shortcutText: { color: p.textPrimary, fontSize: 13, fontWeight: '600' },
   selAllText: { color: p.primary, fontSize: 14, fontWeight: '600' },
   selCancelText: { color: p.textSecondary, fontSize: 14, fontWeight: '600' },
   searchWrap: {
